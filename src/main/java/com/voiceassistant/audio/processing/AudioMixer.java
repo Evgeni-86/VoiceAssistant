@@ -15,6 +15,48 @@ public class AudioMixer {
     private static final int BITS = 16;
     private static final int BLOCK_ALIGN = CHANNELS * BITS / 8;
 
+    /** Преобразует WAV любого поддерживаемого источника в mono PCM 16 кГц для whisper-cli. */
+    public void convertForWhisper(Path input, Path output) {
+        try {
+            WavData wav = readWav(input);
+            long frames = (long) Math.ceil(wav.duration() * 16_000);
+            long dataBytes = frames * 2;
+            if (dataBytes > Integer.MAX_VALUE) {
+                throw new IOException("Запись слишком длинная для WAV");
+            }
+
+            try (DataOutputStream out = new DataOutputStream(
+                    new BufferedOutputStream(Files.newOutputStream(output)))) {
+                out.writeBytes("RIFF");
+                write32(out, 36 + (int) dataBytes);
+                out.writeBytes("WAVE");
+                out.writeBytes("fmt ");
+                write32(out, 16);
+                write16(out, 1);
+                write16(out, 1);
+                write32(out, 16_000);
+                write32(out, 32_000);
+                write16(out, 2);
+                write16(out, 16);
+                out.writeBytes("data");
+                write32(out, (int) dataBytes);
+
+                for (long frame = 0; frame < frames; frame++) {
+                    double time = (double) frame / 16_000;
+                    float sample = 0f;
+                    for (int channel = 0; channel < wav.channels(); channel++) {
+                        sample += wav.sampleAt(time, channel);
+                    }
+                    sample /= wav.channels();
+                    int pcm = Math.round(Math.max(-1f, Math.min(1f, sample)) * 32767f);
+                    write16(out, pcm);
+                }
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("Не удалось подготовить WAV для распознавания", e);
+        }
+    }
+
     public void mix(Path microphone, Path system, Path output) {
         try {
             WavData mic = readWav(microphone);

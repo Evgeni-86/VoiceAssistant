@@ -2,6 +2,7 @@ package com.voiceassistant;
 
 import com.voiceassistant.audio.AudioSourceType;
 import com.voiceassistant.audio.AudioRecordingService;
+import com.voiceassistant.speech.WhisperTranscriptionService;
 
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -11,6 +12,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.TextArea;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
@@ -21,6 +23,8 @@ public class VoiceAssistantApplication extends Application {
 
     private final AudioRecordingService recordingService =
             new AudioRecordingService();
+    private final WhisperTranscriptionService transcriptionService =
+            new WhisperTranscriptionService();
 
     private Path lastRecording;
 
@@ -42,10 +46,15 @@ public class VoiceAssistantApplication extends Application {
 
         Button recordButton = new Button("Начать запись");
         Button stopButton = new Button("Остановить запись");
-        Button sendButton = new Button("Отправить");
+        Button transcribeButton = new Button("Распознать речь");
+        TextArea transcriptArea = new TextArea();
+        transcriptArea.setEditable(false);
+        transcriptArea.setWrapText(true);
+        transcriptArea.setPromptText("Здесь появится текст записи");
+        transcriptArea.setPrefRowCount(6);
 
         stopButton.setDisable(true);
-        sendButton.setDisable(true);
+        transcribeButton.setDisable(true);
 
         recordButton.setOnAction(event -> {
 
@@ -53,7 +62,8 @@ public class VoiceAssistantApplication extends Application {
 
             recordButton.setDisable(true);
             sourceComboBox.setDisable(true);
-            sendButton.setDisable(true);
+            transcribeButton.setDisable(true);
+            transcriptArea.clear();
 
             statusLabel.setText("Запускаем запись...");
 
@@ -102,7 +112,7 @@ public class VoiceAssistantApplication extends Application {
                                 }
 
                                 lastRecording = path;
-                                sendButton.setDisable(false);
+                                transcribeButton.setDisable(false);
 
                                 statusLabel.setText(
                                         "Сохранено: " + path
@@ -111,13 +121,29 @@ public class VoiceAssistantApplication extends Application {
                     );
         });
 
-        sendButton.setOnAction(event -> {
-            if (lastRecording != null) {
-                statusLabel.setText(
-                        "Отправка пока не реализована: " +
-                                lastRecording.getFileName()
-                );
+        transcribeButton.setOnAction(event -> {
+            if (lastRecording == null) {
+                return;
             }
+            transcribeButton.setDisable(true);
+            statusLabel.setText("Распознаём речь...");
+            transcriptionService.transcribe(lastRecording)
+                    .whenComplete((transcript, error) -> Platform.runLater(() -> {
+                        if (closing) {
+                            return;
+                        }
+                        transcribeButton.setDisable(false);
+                        if (error != null) {
+                            Throwable cause = error.getCause() != null
+                                    ? error.getCause() : error;
+                            statusLabel.setText("Ошибка распознавания: " + cause.getMessage());
+                            return;
+                        }
+                        transcriptArea.setText(transcript);
+                        statusLabel.setText(transcript.isBlank()
+                                ? "Речь в записи не обнаружена"
+                                : "Речь распознана");
+                    }));
         });
 
         VBox root = new VBox(
@@ -127,13 +153,14 @@ public class VoiceAssistantApplication extends Application {
                 sourceComboBox,
                 recordButton,
                 stopButton,
-                sendButton
+                transcribeButton,
+                transcriptArea
         );
 
         root.setAlignment(Pos.CENTER);
         root.setPadding(new Insets(30));
 
-        Scene scene = new Scene(root, 550, 400);
+        Scene scene = new Scene(root, 650, 500);
 
         stage.setTitle("Voice Assistant");
         stage.setScene(scene);
@@ -149,11 +176,12 @@ public class VoiceAssistantApplication extends Application {
 
             recordButton.setDisable(true);
             stopButton.setDisable(true);
-            sendButton.setDisable(true);
+            transcribeButton.setDisable(true);
             sourceComboBox.setDisable(true);
 
             statusLabel.setText("Завершаем приложение...");
 
+            transcriptionService.close();
             CompletableFuture.runAsync(recordingService::close)
                     .whenComplete((result, error) ->
                             Platform.runLater(() -> {
