@@ -46,7 +46,7 @@
                     <options>
                         <option>--enable-native-access=javafx.graphics</option>
                         <option>--enable-native-access=ALL-UNNAMED</option>
-                        <option>-Djava.library.path=${project.basedir}/native/build/Release</option>
+                        <option>-Djava.library.path=${project.basedir}/native/release</option>
                     </options>
                 </configuration>
             </plugin>

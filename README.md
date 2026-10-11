@@ -14,6 +14,16 @@ Maven устанавливать отдельно не требуется: в п
 
 ## Сборка и запуск
 
+Если `native\release\WasapiCapture.dll`, `whisper-cli.exe` и модель уже подготовлены, для повседневного запуска откройте `start.cmd` двойным щелчком. При первом запуске после сборки `whisper.cpp` выполните из корня проекта:
+
+```powershell
+.\prepare-whisper.ps1
+```
+
+Скрипт копирует `whisper-cli.exe`, необходимые DLL и `ggml-base.bin` из соседней папки `..\whisper.cpp` в локальную папку `whisper\`. При другом расположении исходников укажите `-WhisperRoot 'D:\путь\к\whisper.cpp'`. Папка `whisper\` исключена из Git. `start.cmd` сам подставляет локальные пути к Whisper и ищет JDK 25 в `JAVA_HOME` либо в `%USERPROFILE%\.jdks`.
+
+Для первоначальной сборки компонентов выполните следующие шаги.
+
 Откройте PowerShell в корне проекта. Для сборки C++ используйте терминал разработчика Visual Studio с доступными `cmake` и MSVC. Если JDK не определяется автоматически, укажите путь к нему через `JAVA_HOME` (к каталогу JDK, без `bin`): `$env:JAVA_HOME = 'C:\Path\To\jdk-25'`.
 
 Сначала сконфигурируйте и соберите нативную библиотеку:
@@ -23,7 +33,7 @@ cmake -S native -B native\build
 cmake --build native\build --config Release
 ```
 
-При генераторе Visual Studio DLL будет находиться в `native\build\Release\WasapiCapture.dll`. Если CMake по умолчанию выбирает другой генератор или архитектуру, задайте их при конфигурации: `cmake -S native -B native\build -G "Visual Studio 17 2022" -A x64`. Конфигурация Maven ожидает DLL именно в этом каталоге.
+Сборка помещает готовую DLL сразу в `native\release\WasapiCapture.dll`. Этот файл можно хранить в Git; служебные файлы `native\build\`, включая `.lib` и `.exp`, в Git не добавляются. Если CMake по умолчанию выбирает другой генератор или архитектуру, задайте их при конфигурации: `cmake -S native -B native\build -G "Visual Studio 17 2022" -A x64`.
 
 Затем соберите и запустите JavaFX-приложение:
 
@@ -32,11 +42,26 @@ cmake --build native\build --config Release
 .\mvnw.cmd javafx:run
 ```
 
-Плагин JavaFX в `pom.xml` передаёт приложению путь к DLL через `java.library.path`. Класс `SystemAudioSource` вызывает `System.loadLibrary("WasapiCapture")` при создании сервиса записи, поэтому DLL нужна и для запуска с выбранным режимом «Микрофон». При запуске из IntelliJ IDEA укажите в VM options `-Djava.library.path=<абсолютный путь к native\build\Release>`.
+Плагин JavaFX в `pom.xml` передаёт приложению путь к DLL через `java.library.path`. Класс `SystemAudioSource` вызывает `System.loadLibrary("WasapiCapture")` при создании сервиса записи, поэтому DLL нужна и для запуска с выбранным режимом «Микрофон». При запуске из IntelliJ IDEA укажите в VM options `-Djava.library.path=<абсолютный путь к native\release>`.
 
 ## Настройка распознавания
 
-Соберите [whisper.cpp](https://github.com/ggml-org/whisper.cpp) по его инструкции для Windows и скачайте [многоязычную модель GGML](https://github.com/ggml-org/whisper.cpp/blob/master/models/README.md), например `ggml-base.bin` для первого запуска. Команда `./models/download-ggml-model.cmd base` сообщает полный путь сохранённого файла; в текущей версии скрипта он находится в корне `whisper.cpp`. Модель с суффиксом `.en` предназначена для английского языка и для русской речи не подходит. Укажите абсолютные пути в переменных окружения **процесса, запускающего приложение**:
+Откройте терминал разработчика Visual Studio в корне скачанного [whisper.cpp](https://github.com/ggml-org/whisper.cpp) и соберите программу распознавания:
+
+```powershell
+cmake -S . -B build
+cmake --build build --config Release --target whisper-cli
+```
+
+При генераторе Visual Studio результат находится в `build\bin\Release\whisper-cli.exe`. Затем скачайте [многоязычную модель GGML](https://github.com/ggml-org/whisper.cpp/blob/master/models/README.md):
+
+```powershell
+.\models\download-ggml-model.cmd base
+```
+
+Скрипт сообщает полный путь сохранённого `ggml-base.bin`; в текущей версии он находится в корне `whisper.cpp`. Модель с суффиксом `.en` предназначена для английского языка и для русской речи не подходит. После этого выполните `prepare-whisper.ps1` из корня `voiceassistant`. Приложение найдёт файлы в папке `whisper\` автоматически.
+
+Если хотите хранить Whisper отдельно, можно вместо этого указать абсолютные пути в переменных окружения **процесса, запускающего приложение**:
 
 ```powershell
 $env:VOICEASSISTANT_WHISPER_CLI = 'C:\Path\To\whisper.cpp\build\bin\Release\whisper-cli.exe'
@@ -44,7 +69,7 @@ $env:VOICEASSISTANT_WHISPER_MODEL = 'C:\Path\To\whisper.cpp\ggml-base.bin'
 .\mvnw.cmd javafx:run
 ```
 
-Для запуска из IntelliJ IDEA добавьте эти переменные в Run Configuration. Приложение само преобразует WAV в моно PCM 16 кГц, который принимает `whisper-cli`; `ffmpeg` не требуется. Распознавание выполняется локально, после остановки записи, в фоновом потоке. Первый запуск может занимать больше времени из-за загрузки модели.
+Для запуска из IntelliJ IDEA с отдельным расположением файлов добавьте эти переменные в Run Configuration. Для локальной папки `whisper\` переменные не требуются, если рабочая директория конфигурации — корень проекта. Приложение само преобразует WAV в моно PCM 16 кГц, который принимает `whisper-cli`; `ffmpeg` не требуется. Распознавание выполняется локально, после остановки записи, в фоновом потоке. Первый запуск может занимать больше времени из-за загрузки модели.
 
 ## Использование
 

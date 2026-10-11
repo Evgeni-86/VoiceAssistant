@@ -22,8 +22,8 @@ public class WhisperTranscriptionService implements AutoCloseable {
     }
 
     private String transcribeNow(Path recording) {
-        Path cli = configuredPath("VOICEASSISTANT_WHISPER_CLI");
-        Path model = configuredPath("VOICEASSISTANT_WHISPER_MODEL");
+        Path cli = configuredPath("VOICEASSISTANT_WHISPER_CLI", "whisper-cli.exe");
+        Path model = configuredPath("VOICEASSISTANT_WHISPER_MODEL", "ggml-base.bin");
 
         if (!Files.isRegularFile(cli)) {
             throw new IllegalStateException("Не найден whisper-cli: " + cli);
@@ -95,12 +95,12 @@ public class WhisperTranscriptionService implements AutoCloseable {
         }
     }
 
-    private Path configuredPath(String name) {
+    private Path configuredPath(String name, String localName) {
         String value = System.getenv(name);
-        if (value == null || value.isBlank()) {
-            throw new IllegalStateException("Задайте переменную окружения " + name);
+        if (value != null && !value.isBlank()) {
+            return Path.of(value).toAbsolutePath();
         }
-        return Path.of(value).toAbsolutePath();
+        return Path.of("whisper", localName).toAbsolutePath();
     }
 
     @Override

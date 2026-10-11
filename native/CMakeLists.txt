@@ -20,3 +20,8 @@ target_link_libraries(WasapiCapture PRIVATE
     ole32
     uuid
 )
+
+# Готовая DLL лежит отдельно от служебных файлов CMake.
+set_target_properties(WasapiCapture PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_SOURCE_DIR}/release"
+)
