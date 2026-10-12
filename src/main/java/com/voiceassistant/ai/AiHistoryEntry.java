@@ -7,13 +7,13 @@ import java.util.UUID;
 public class AiHistoryEntry {
 
     public enum Status {
-        PROCESSING, COMPLETED, FAILED
+        PROCESSING, COMPLETED, FAILED, CANCELLED
     }
 
     private final UUID id = UUID.randomUUID();
     private final Instant createdAt = Instant.now();
     private final String request;
-    private String response;
+    private final StringBuilder response = new StringBuilder();
     private String error;
     private Status status = Status.PROCESSING;
 
@@ -34,7 +34,7 @@ public class AiHistoryEntry {
     }
 
     public String getResponse() {
-        return response;
+        return response.toString();
     }
 
     public String getError() {
@@ -45,13 +45,20 @@ public class AiHistoryEntry {
         return status;
     }
 
-    public void complete(String response) {
-        this.response = response;
+    public void complete() {
         this.status = Status.COMPLETED;
+    }
+
+    public void appendResponse(String chunk) {
+        this.response.append(chunk);
     }
 
     public void fail(String error) {
         this.error = error;
         this.status = Status.FAILED;
+    }
+
+    public void cancel() {
+        this.status = Status.CANCELLED;
     }
 }

@@ -1,7 +1,15 @@
 package com.voiceassistant.ai;
 
-/** Контракт отправки обычного текста в ИИ-сервис. */
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+
+/** Потоковая генерация обычного текста; вызывается в фоновом потоке. */
 public interface AiService {
 
-    String sendMessage(String message);
+    /**
+     * Передаёт только новые фрагменты в порядке получения. Возврат означает успешное
+     * завершение; исключение сообщает об ошибке, CancellationException — об отмене.
+     * Реализация должна регулярно проверять cancelled и прекращать выдачу фрагментов.
+     */
+    void streamMessage(String message, Consumer<String> onChunk, BooleanSupplier cancelled) throws Exception;
 }
