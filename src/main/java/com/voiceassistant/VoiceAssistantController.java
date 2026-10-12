@@ -8,17 +8,24 @@ import com.voiceassistant.ai.AiSettings;
 import com.voiceassistant.ai.AiSettingsService;
 import com.voiceassistant.audio.AudioRecordingService;
 import com.voiceassistant.speech.WhisperTranscriptionService;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 final class VoiceAssistantController {
     private enum State {
@@ -49,6 +56,48 @@ final class VoiceAssistantController {
     private Stage stage;
     private AiSettings settings;
     private AiSettingsDialog settingsDialog;
+    private AiRequest activeAiRequest;
+    private Timeline aiFlushTimer;
+
+    private static final class AiRequest {
+        final AiHistoryEntry entry;
+        final boolean automatic;
+        final AtomicBoolean cancelled = new AtomicBoolean();
+        final AtomicBoolean finished = new AtomicBoolean();
+        final StringBuilder pending = new StringBuilder();
+        Future<?> task;
+
+        AiRequest(AiHistoryEntry entry, boolean automatic) {
+            this.entry = entry;
+            this.automatic = automatic;
+        }
+
+        void accept(String chunk) {
+            if (chunk == null || chunk.isEmpty()) {
+                return;
+            }
+            synchronized (pending) {
+                if (!cancelled.get()) {
+                    pending.append(chunk);
+                }
+            }
+        }
+
+        String drain() {
+            synchronized (pending) {
+                String chunks = pending.toString();
+                pending.setLength(0);
+                return chunks;
+            }
+        }
+
+        void cancel() {
+            cancelled.set(true);
+            if (task != null) {
+                task.cancel(true);
+            }
+        }
+    }
 
     void start(Stage stage) {
         this.stage = stage;
@@ -75,6 +124,10 @@ final class VoiceAssistantController {
             }
 
             state = State.CLOSING;
+            if (activeAiRequest != null) {
+                activeAiRequest.cancel();
+                finishAiRequest(activeAiRequest, new CancellationException("Генерация ответа отменена"));
+            }
             updateControls();
             view.statusLabel.setText("Завершаем приложение...");
             transcriptionService.close();
@@ -263,6 +316,9 @@ final class VoiceAssistantController {
     }
 
     private void sendToAi(String message, boolean automatic) {
+        if (activeAiRequest != null || (state != State.IDLE && state != State.AUTO_TRANSCRIBING)) {
+            return;
+        }
         if (!aiAvailable()) {
             state = State.IDLE;
             updateControls();
@@ -270,6 +326,8 @@ final class VoiceAssistantController {
         }
         AiService aiService = aiServiceSelector.serviceFor(settings);
         AiHistoryEntry entry = new AiHistoryEntry(message);
+        AiRequest request = new AiRequest(entry, automatic);
+        activeAiRequest = request;
         history.add(0, entry);
         if (view.historyListView.getSelectionModel().getSelectedItem() == null) {
             view.historyListView.getSelectionModel().select(entry);
@@ -277,43 +335,94 @@ final class VoiceAssistantController {
 
         state = automatic ? State.AUTO_SENDING_AI : State.SENDING_AI;
         view.aiResponseArea.clear();
-        view.aiStatusLabel.setText("Обработка запроса ИИ...");
+        view.aiStatusLabel.setText("Генерация ответа ИИ...");
         if (automatic) {
-            view.statusLabel.setText("Обработка запроса ИИ...");
+            view.statusLabel.setText("Генерация ответа ИИ...");
         }
         updateControls();
 
-        CompletableFuture.supplyAsync(() -> aiService.sendMessage(message), aiExecutor)
-                .whenComplete((response, error) -> Platform.runLater(() -> {
-                    if (state == State.CLOSING) {
-                        return;
-                    }
-                    state = State.IDLE;
-                    if (error != null || response == null || response.isBlank()) {
-                        String details = error == null
-                                ? "сервис вернул пустой ответ" : errorMessage(error);
-                        if (history.contains(entry)) {
-                            entry.fail(details);
-                            view.refreshHistoryEntry(entry);
-                        }
-                        String messageText = "Ошибка обработки запроса ИИ: " + details;
-                        view.aiStatusLabel.setText(messageText);
-                        if (automatic) {
-                            view.statusLabel.setText(messageText);
-                        }
-                    } else {
-                        if (history.contains(entry)) {
-                            entry.complete(response);
-                            view.refreshHistoryEntry(entry);
-                        }
-                        view.aiResponseArea.setText(response);
-                        view.aiStatusLabel.setText("Ответ ИИ получен.");
-                        if (automatic) {
-                            view.statusLabel.setText("Готово. Ответ ИИ получен.");
-                        }
-                    }
-                    updateControls();
-                }));
+        aiFlushTimer = new Timeline(new KeyFrame(Duration.millis(75), event -> flushAiChunks(request)));
+        aiFlushTimer.setCycleCount(Timeline.INDEFINITE);
+        aiFlushTimer.play();
+        try {
+            request.task = aiExecutor.submit(() -> {
+                Throwable failure = null;
+                try {
+                    aiService.streamMessage(message, request::accept, request.cancelled::get);
+                } catch (InterruptedException error) {
+                    Thread.currentThread().interrupt();
+                    failure = new CancellationException("Генерация ответа отменена");
+                } catch (Throwable error) {
+                    failure = error;
+                }
+                Throwable result = failure;
+                Platform.runLater(() -> finishAiRequest(request, result));
+            });
+        } catch (RejectedExecutionException error) {
+            finishAiRequest(request, error);
+        }
+    }
+
+    private void flushAiChunks(AiRequest request) {
+        String chunks = request.drain();
+        if (chunks.isEmpty()) {
+            return;
+        }
+        request.entry.appendResponse(chunks);
+        if (state != State.CLOSING) {
+            view.aiResponseArea.appendText(chunks);
+            if (history.contains(request.entry)) {
+                view.refreshHistoryEntry(request.entry);
+            }
+        }
+    }
+
+    private void finishAiRequest(AiRequest request, Throwable failure) {
+        if (!request.finished.compareAndSet(false, true)) {
+            return;
+        }
+        if (aiFlushTimer != null) {
+            aiFlushTimer.stop();
+            aiFlushTimer = null;
+        }
+        flushAiChunks(request);
+        activeAiRequest = null;
+
+        AiHistoryEntry entry = request.entry;
+        if (request.cancelled.get() || failure instanceof CancellationException) {
+            entry.cancel();
+            if (state != State.CLOSING) {
+                view.aiStatusLabel.setText("Генерация ответа ИИ отменена.");
+                if (request.automatic) {
+                    view.statusLabel.setText("Генерация ответа ИИ отменена.");
+                }
+            }
+        } else if (failure != null || entry.getResponse().isBlank()) {
+            String details = failure == null ? "сервис вернул пустой ответ" : errorMessage(failure);
+            entry.fail(details);
+            if (state != State.CLOSING) {
+                String messageText = "Ошибка обработки запроса ИИ: " + details;
+                view.aiStatusLabel.setText(messageText);
+                if (request.automatic) {
+                    view.statusLabel.setText(messageText);
+                }
+            }
+        } else {
+            entry.complete();
+            if (state != State.CLOSING) {
+                view.aiStatusLabel.setText("Ответ ИИ получен.");
+                if (request.automatic) {
+                    view.statusLabel.setText("Готово. Ответ ИИ получен.");
+                }
+            }
+        }
+        if (state != State.CLOSING) {
+            if (history.contains(entry)) {
+                view.refreshHistoryEntry(entry);
+            }
+            state = State.IDLE;
+            updateControls();
+        }
     }
 
     private boolean aiAvailable() {

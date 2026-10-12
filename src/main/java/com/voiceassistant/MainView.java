@@ -228,9 +228,13 @@ final class MainView {
 
     private String historySummary(AiHistoryEntry entry) {
         String result = switch (entry.getStatus()) {
-            case PROCESSING -> "Обрабатывается...";
+            case PROCESSING -> entry.getResponse().isEmpty()
+                    ? "Обрабатывается..." : preview(entry.getResponse());
             case COMPLETED -> preview(entry.getResponse());
-            case FAILED -> "Ошибка: " + preview(entry.getError());
+            case FAILED -> entry.getResponse().isEmpty()
+                    ? "Ошибка: " + preview(entry.getError()) : preview(entry.getResponse());
+            case CANCELLED -> entry.getResponse().isEmpty()
+                    ? "Отменено" : preview(entry.getResponse());
         };
         return HISTORY_TIME_FORMAT.format(entry.getCreatedAt()) + " · " + historyStatus(entry)
                 + "\nЗапрос: " + preview(entry.getRequest())
@@ -247,6 +251,7 @@ final class MainView {
             case PROCESSING -> "Обрабатывается";
             case COMPLETED -> "Готово";
             case FAILED -> "Ошибка";
+            case CANCELLED -> "Отменено";
         };
     }
 
@@ -262,9 +267,14 @@ final class MainView {
                 + " · " + historyStatus(entry));
         historyRequestArea.setText(entry.getRequest());
         historyResponseArea.setText(switch (entry.getStatus()) {
-            case PROCESSING -> "Обрабатывается...";
+            case PROCESSING -> entry.getResponse().isEmpty()
+                    ? "Обрабатывается..." : entry.getResponse();
             case COMPLETED -> entry.getResponse();
-            case FAILED -> "Ошибка: " + entry.getError();
+            case FAILED -> entry.getResponse().isEmpty()
+                    ? "Ошибка: " + entry.getError()
+                    : entry.getResponse() + "\n\nОшибка: " + entry.getError();
+            case CANCELLED -> entry.getResponse().isEmpty()
+                    ? "Генерация ответа отменена" : entry.getResponse();
         });
     }
 
