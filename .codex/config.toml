@@ -1,3 +1,0 @@
-# Settings
-model_context_window = 800000
-model_auto_compact_token_limit = 640000

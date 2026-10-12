@@ -5,6 +5,12 @@ whisper/*.bin
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+*-promt.txt
+*-key.txt
+.codex
+AGENTS.md
+
+
 ### STS ###
 .apt_generated
 .classpath
