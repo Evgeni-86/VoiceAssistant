@@ -35,6 +35,8 @@ final class MainView {
 
     final Label statusLabel;
     final Label aiStatusLabel;
+    final Label aiModeLabel;
+    final Button aiSettingsButton;
     final ComboBox<AudioSourceType> sourceComboBox;
     final Button recordButton;
     final Button stopButton;
@@ -52,6 +54,9 @@ final class MainView {
         statusLabel = new Label("Готов к записи");
         statusLabel.setWrapText(true);
         statusLabel.setMaxWidth(Double.MAX_VALUE);
+        aiModeLabel = new Label("ИИ: загрузка настроек…");
+        aiSettingsButton = new Button("⚙");
+        aiSettingsButton.setTooltip(new javafx.scene.control.Tooltip("Настройки ИИ"));
         aiStatusLabel = new Label("ИИ: готов к отправке");
 
         sourceComboBox = new ComboBox<>();
@@ -180,8 +185,14 @@ final class MainView {
         HBox sourceSelector = new HBox(12, new Label("Источник записи:"), sourceComboBox);
         sourceSelector.setAlignment(Pos.CENTER);
 
+        Region topSpacer = new Region();
+        HBox.setHgrow(topSpacer, Priority.ALWAYS);
+        HBox topBar = new HBox(8, topSpacer, aiModeLabel, aiSettingsButton);
+        topBar.setAlignment(Pos.CENTER_RIGHT);
+
         VBox root = new VBox(
                 12,
+                topBar,
                 sourceSelector,
                 recordButton,
                 stopActions,

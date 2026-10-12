@@ -2,7 +2,10 @@ package com.voiceassistant;
 
 import com.voiceassistant.ai.AiService;
 import com.voiceassistant.ai.AiHistoryEntry;
-import com.voiceassistant.ai.StubAiService;
+import com.voiceassistant.ai.AiMode;
+import com.voiceassistant.ai.AiServiceSelector;
+import com.voiceassistant.ai.AiSettings;
+import com.voiceassistant.ai.AiSettingsService;
 import com.voiceassistant.audio.AudioRecordingService;
 import com.voiceassistant.speech.WhisperTranscriptionService;
 import javafx.application.Platform;
@@ -26,8 +29,13 @@ final class VoiceAssistantController {
     private final AudioRecordingService recordingService = new AudioRecordingService();
     private final WhisperTranscriptionService transcriptionService =
             new WhisperTranscriptionService();
-    // Для будущей интеграции достаточно заменить реализацию в этом поле.
-    private final AiService aiService = new StubAiService();
+    private final AiServiceSelector aiServiceSelector = new AiServiceSelector();
+    private final AiSettingsService settingsService = new AiSettingsService();
+    private final ExecutorService settingsExecutor = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "voiceassistant-settings");
+        thread.setDaemon(true);
+        return thread;
+    });
     private final ExecutorService aiExecutor = Executors.newSingleThreadExecutor(task -> {
         Thread thread = new Thread(task, "voiceassistant-ai");
         thread.setDaemon(true);
@@ -38,9 +46,14 @@ final class VoiceAssistantController {
     private State state = State.IDLE;
     private final ObservableList<AiHistoryEntry> history = FXCollections.observableArrayList();
     private MainView view;
+    private Stage stage;
+    private AiSettings settings;
+    private AiSettingsDialog settingsDialog;
 
     void start(Stage stage) {
+        this.stage = stage;
         view = new MainView(stage, history, this::updateControls);
+        view.aiSettingsButton.setOnAction(event -> openSettings());
         view.recordButton.setOnAction(event -> startRecording());
         view.stopButton.setOnAction(event -> stopRecording(false));
         view.finishAndSendButton.setOnAction(event -> stopRecording(true));
@@ -66,6 +79,7 @@ final class VoiceAssistantController {
             view.statusLabel.setText("Завершаем приложение...");
             transcriptionService.close();
             aiExecutor.shutdownNow();
+            settingsExecutor.shutdownNow();
             CompletableFuture.runAsync(recordingService::close)
                     .whenComplete((result, error) -> Platform.runLater(() -> {
                         if (error != null) {
@@ -78,17 +92,49 @@ final class VoiceAssistantController {
 
         updateControls();
         view.show(stage);
+        CompletableFuture.supplyAsync(() -> {
+            try {
+                return settingsService.load();
+            } catch (Exception error) {
+                throw new CompletionException(error);
+            }
+        }, settingsExecutor).whenComplete((loaded, error) -> Platform.runLater(() -> {
+            if (state == State.CLOSING) {
+                return;
+            }
+            settings = error == null ? loaded : AiSettings.defaults();
+            view.aiModeLabel.setText("ИИ: " + (settings.mode() == AiMode.STUB ? "Stub" : "DeepSeek"));
+            if (error != null) {
+                view.statusLabel.setText("Не удалось загрузить настройки ИИ: " + errorMessage(error)
+                        + " Используются значения по умолчанию.");
+            }
+            updateControls();
+        }));
+    }
+
+    private void openSettings() {
+        if (settingsDialog != null && settingsDialog.isShowing()) {
+            settingsDialog.focus();
+            return;
+        }
+        settingsDialog = new AiSettingsDialog(stage, settings, settingsService, settingsExecutor, saved -> {
+            settings = saved;
+            view.aiModeLabel.setText("ИИ: " + (saved.mode() == AiMode.STUB ? "Stub" : "DeepSeek"));
+            updateControls();
+        });
+        settingsDialog.show();
     }
 
     private void updateControls() {
         boolean idle = state == State.IDLE;
         boolean recording = state == State.RECORDING;
+        view.aiSettingsButton.setDisable(settings == null || state == State.CLOSING);
         view.recordButton.setDisable(!idle);
         view.sourceComboBox.setDisable(!idle);
         view.stopButton.setDisable(!recording);
-        view.finishAndSendButton.setDisable(!recording);
+        view.finishAndSendButton.setDisable(!recording || settings == null);
         view.transcribeButton.setDisable(!idle || lastRecording == null);
-        view.sendToAiButton.setDisable(!idle || view.transcriptArea.getText().isBlank());
+        view.sendToAiButton.setDisable(!idle || settings == null || view.transcriptArea.getText().isBlank());
         view.transcriptArea.setEditable(idle);
     }
 
@@ -132,6 +178,9 @@ final class VoiceAssistantController {
 
     private void stopRecording(boolean automatic) {
         if (state != State.RECORDING) {
+            return;
+        }
+        if (automatic && !aiAvailable()) {
             return;
         }
 
@@ -214,6 +263,12 @@ final class VoiceAssistantController {
     }
 
     private void sendToAi(String message, boolean automatic) {
+        if (!aiAvailable()) {
+            state = State.IDLE;
+            updateControls();
+            return;
+        }
+        AiService aiService = aiServiceSelector.serviceFor(settings);
         AiHistoryEntry entry = new AiHistoryEntry(message);
         history.add(0, entry);
         if (view.historyListView.getSelectionModel().getSelectedItem() == null) {
@@ -259,6 +314,14 @@ final class VoiceAssistantController {
                     }
                     updateControls();
                 }));
+    }
+
+    private boolean aiAvailable() {
+        if (settings != null && settings.mode() == AiMode.STUB) {
+            return true;
+        }
+        view.aiStatusLabel.setText(AiServiceSelector.DEEPSEEK_UNAVAILABLE);
+        return false;
     }
 
     private String errorMessage(Throwable error) {
