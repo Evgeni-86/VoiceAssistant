@@ -1,0 +1,15 @@
+package com.voiceassistant.ai;
+
+/** Локальная заглушка до подключения настоящего ИИ-сервиса. */
+public class StubAiService implements AiService {
+
+    @Override
+    public String sendMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return "Введите текст сообщения для ИИ.";
+        }
+
+        return "Это тестовый ответ ИИ. Получено сообщение: " + message.trim()
+                + ". В будущем здесь будет ответ модели DeepSeek.";
+    }
+}
