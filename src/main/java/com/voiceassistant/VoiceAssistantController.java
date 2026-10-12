@@ -36,8 +36,8 @@ final class VoiceAssistantController {
     private final AudioRecordingService recordingService = new AudioRecordingService();
     private final WhisperTranscriptionService transcriptionService =
             new WhisperTranscriptionService();
-    private final AiServiceSelector aiServiceSelector = new AiServiceSelector();
     private final AiSettingsService settingsService = new AiSettingsService();
+    private final AiServiceSelector aiServiceSelector = new AiServiceSelector(settingsService);
     private final ExecutorService settingsExecutor = Executors.newSingleThreadExecutor(task -> {
         Thread thread = new Thread(task, "voiceassistant-settings");
         thread.setDaemon(true);
@@ -61,14 +61,16 @@ final class VoiceAssistantController {
 
     private static final class AiRequest {
         final AiHistoryEntry entry;
+        final AiService service;
         final boolean automatic;
         final AtomicBoolean cancelled = new AtomicBoolean();
         final AtomicBoolean finished = new AtomicBoolean();
         final StringBuilder pending = new StringBuilder();
         Future<?> task;
 
-        AiRequest(AiHistoryEntry entry, boolean automatic) {
+        AiRequest(AiHistoryEntry entry, AiService service, boolean automatic) {
             this.entry = entry;
+            this.service = service;
             this.automatic = automatic;
         }
 
@@ -93,6 +95,7 @@ final class VoiceAssistantController {
 
         void cancel() {
             cancelled.set(true);
+            service.cancelActive();
             if (task != null) {
                 task.cancel(true);
             }
@@ -132,6 +135,7 @@ final class VoiceAssistantController {
             view.statusLabel.setText("Завершаем приложение...");
             transcriptionService.close();
             aiExecutor.shutdownNow();
+            aiServiceSelector.close();
             settingsExecutor.shutdownNow();
             CompletableFuture.runAsync(recordingService::close)
                     .whenComplete((result, error) -> Platform.runLater(() -> {
@@ -156,7 +160,7 @@ final class VoiceAssistantController {
                 return;
             }
             settings = error == null ? loaded : AiSettings.defaults();
-            view.aiModeLabel.setText("ИИ: " + (settings.mode() == AiMode.STUB ? "Stub" : "DeepSeek"));
+            view.aiModeLabel.setText("ИИ: " + modeName(settings.mode()));
             if (error != null) {
                 view.statusLabel.setText("Не удалось загрузить настройки ИИ: " + errorMessage(error)
                         + " Используются значения по умолчанию.");
@@ -172,7 +176,7 @@ final class VoiceAssistantController {
         }
         settingsDialog = new AiSettingsDialog(stage, settings, settingsService, settingsExecutor, saved -> {
             settings = saved;
-            view.aiModeLabel.setText("ИИ: " + (saved.mode() == AiMode.STUB ? "Stub" : "DeepSeek"));
+            view.aiModeLabel.setText("ИИ: " + modeName(saved.mode()));
             updateControls();
         });
         settingsDialog.show();
@@ -326,7 +330,7 @@ final class VoiceAssistantController {
         }
         AiService aiService = aiServiceSelector.serviceFor(settings);
         AiHistoryEntry entry = new AiHistoryEntry(message);
-        AiRequest request = new AiRequest(entry, automatic);
+        AiRequest request = new AiRequest(entry, aiService, automatic);
         activeAiRequest = request;
         history.add(0, entry);
         if (view.historyListView.getSelectionModel().getSelectedItem() == null) {
@@ -426,11 +430,25 @@ final class VoiceAssistantController {
     }
 
     private boolean aiAvailable() {
-        if (settings != null && settings.mode() == AiMode.STUB) {
-            return true;
+        if (settings == null) return false;
+        if (settings.mode() == AiMode.STUB) return true;
+        if (settings.mode() == AiMode.DEEPSEEK) {
+            view.aiStatusLabel.setText(AiServiceSelector.DEEPSEEK_UNAVAILABLE);
+            return false;
         }
-        view.aiStatusLabel.setText(AiServiceSelector.DEEPSEEK_UNAVAILABLE);
-        return false;
+        if (!settingsService.hasApiKey(AiMode.OPENROUTER)) {
+            view.aiStatusLabel.setText("Не настроен API-ключ OpenRouter. Откройте настройки ИИ.");
+            return false;
+        }
+        return true;
+    }
+
+    private static String modeName(AiMode mode) {
+        return switch (mode) {
+            case STUB -> "Stub";
+            case OPENROUTER -> "OpenRouter";
+            case DEEPSEEK -> "DeepSeek";
+        };
     }
 
     private String errorMessage(Throwable error) {

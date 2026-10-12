@@ -24,7 +24,6 @@ import java.util.function.Consumer;
 
 final class AiSettingsDialog {
     private final Stage stage = new Stage();
-    private boolean deleteKey;
 
     AiSettingsDialog(Stage owner, AiSettings current, AiSettingsService service,
                      Executor executor, Consumer<AiSettings> onSaved) {
@@ -40,31 +39,70 @@ final class AiSettingsDialog {
         mode.setMaxWidth(Double.MAX_VALUE);
 
         ComboBox<String> model = new ComboBox<>();
-        model.getItems().setAll(AiSettings.MODELS);
-        model.setValue(current.model());
         model.setMaxWidth(Double.MAX_VALUE);
-        model.disableProperty().bind(mode.valueProperty().isEqualTo(AiMode.STUB));
+        final String[] deepSeekModel = {current.deepSeekModel()};
+        final String[] openRouterModel = {current.openRouterModel()};
+        model.valueProperty().addListener((obs, oldValue, value) -> {
+            if (value == null) return;
+            if (mode.getValue() == AiMode.OPENROUTER) openRouterModel[0] = value;
+            else deepSeekModel[0] = value;
+        });
 
         PasswordField keyField = new PasswordField();
-        keyField.setPromptText("Новый API-ключ DeepSeek");
-        Label keyState = new Label(service.hasApiKey() ? "Проверяем сохранённый API-ключ…" : "API-ключ не сохранён");
+        Label keyTitle = new Label();
+        Label keyState = new Label();
         keyState.setWrapText(true);
         Button removeKey = new Button("Удалить сохранённый ключ");
-        removeKey.setDisable(!service.hasApiKey());
+        java.util.Map<AiMode, String> newKeys = new java.util.EnumMap<>(AiMode.class);
+        java.util.Set<AiMode> deletedKeys = java.util.EnumSet.noneOf(AiMode.class);
+        Runnable updateProvider = () -> {
+            AiMode selected = mode.getValue();
+            model.getItems().setAll(selected == AiMode.OPENROUTER
+                    ? AiSettings.OPENROUTER_MODELS : AiSettings.DEEPSEEK_MODELS);
+            model.setValue(selected == AiMode.OPENROUTER ? openRouterModel[0] : deepSeekModel[0]);
+            model.setDisable(selected == AiMode.STUB);
+            boolean usesKey = selected != AiMode.STUB;
+            keyTitle.setVisible(usesKey);
+            keyField.setVisible(usesKey);
+            keyState.setVisible(usesKey);
+            removeKey.setVisible(usesKey);
+            keyTitle.setManaged(usesKey);
+            keyField.setManaged(usesKey);
+            keyState.setManaged(usesKey);
+            removeKey.setManaged(usesKey);
+            if (usesKey) {
+                String provider = selected == AiMode.OPENROUTER ? "OpenRouter" : "DeepSeek";
+                keyTitle.setText("API-ключ " + provider);
+                keyField.setPromptText("Новый API-ключ " + provider);
+                keyField.setText(newKeys.getOrDefault(selected, ""));
+                boolean exists = service.hasApiKey(selected);
+                keyState.setText(deletedKeys.contains(selected) ? "API-ключ будет удалён после сохранения настроек"
+                        : !keyField.getText().isEmpty() ? "Новый API-ключ будет сохранён после нажатия «Сохранить»"
+                        : exists ? "API-ключ сохранён" : "API-ключ не сохранён");
+                removeKey.setDisable(!exists || deletedKeys.contains(selected));
+            }
+        };
+        mode.valueProperty().addListener((obs, oldValue, value) -> updateProvider.run());
+        updateProvider.run();
         removeKey.setOnAction(event -> {
-            deleteKey = true;
+            deletedKeys.add(mode.getValue());
+            newKeys.remove(mode.getValue());
             keyField.clear();
             keyState.setText("API-ключ будет удалён после сохранения настроек");
             removeKey.setDisable(true);
         });
         keyField.textProperty().addListener((observable, oldValue, newValue) -> {
+            AiMode selected = mode.getValue();
+            if (selected == AiMode.STUB) return;
             if (!newValue.isEmpty()) {
-                deleteKey = false;
+                newKeys.put(selected, newValue);
+                deletedKeys.remove(selected);
                 keyState.setText("Новый API-ключ будет сохранён после нажатия «Сохранить»");
-                removeKey.setDisable(!service.hasApiKey());
-            } else if (!deleteKey) {
-                keyState.setText(service.hasApiKey() ? "API-ключ сохранён" : "API-ключ не сохранён");
-                removeKey.setDisable(!service.hasApiKey());
+                removeKey.setDisable(!service.hasApiKey(selected));
+            } else if (!deletedKeys.contains(selected)) {
+                newKeys.remove(selected);
+                keyState.setText(service.hasApiKey(selected) ? "API-ключ сохранён" : "API-ключ не сохранён");
+                removeKey.setDisable(!service.hasApiKey(selected));
             }
         });
 
@@ -87,7 +125,7 @@ final class AiSettingsDialog {
         save.setOnAction(event -> {
             AiSettings settings;
             try {
-                settings = new AiSettings(mode.getValue(), model.getValue(), prompt.getText());
+                settings = new AiSettings(mode.getValue(), deepSeekModel[0], openRouterModel[0], prompt.getText());
             } catch (IllegalArgumentException | NullPointerException validationError) {
                 error.setText(validationError.getMessage() == null
                         ? "Заполните все настройки ИИ." : validationError.getMessage());
@@ -97,11 +135,13 @@ final class AiSettingsDialog {
             cancel.setDisable(true);
             stage.setOnCloseRequest(closeEvent -> closeEvent.consume());
             error.setText("Сохраняем настройки…");
-            String newKey = keyField.getText();
-            boolean remove = deleteKey;
+            java.util.Map<AiMode, String> keysToSave = new java.util.EnumMap<>(AiMode.class);
+            keysToSave.putAll(newKeys);
+            java.util.Set<AiMode> keysToDelete = java.util.EnumSet.noneOf(AiMode.class);
+            keysToDelete.addAll(deletedKeys);
             CompletableFuture.runAsync(() -> {
                 try {
-                    service.save(settings, newKey, remove);
+                    service.save(settings, keysToSave, keysToDelete);
                 } catch (Exception saveError) {
                     throw new java.util.concurrent.CompletionException(saveError);
                 }
@@ -121,28 +161,13 @@ final class AiSettingsDialog {
 
         VBox content = new VBox(8,
                 new Label("Режим ИИ"), mode,
-                new Label("API-ключ DeepSeek"), keyField, keyState, removeKey,
+                keyTitle, keyField, keyState, removeKey,
                 new Label("Модель"), model,
                 new Label("Системный промпт"), prompt, resetPrompt,
                 error, actions);
         content.setPadding(new Insets(16));
         stage.setScene(new Scene(content, 520, 540));
 
-        if (service.hasApiKey()) {
-            CompletableFuture.runAsync(() -> {
-                try {
-                    service.checkApiKey();
-                } catch (Exception readError) {
-                    throw new java.util.concurrent.CompletionException(readError);
-                }
-            }, executor).whenComplete((ignored, failure) -> Platform.runLater(() -> {
-                if (deleteKey || !keyField.getText().isEmpty()) {
-                    return;
-                }
-                keyState.setText(failure == null ? "API-ключ сохранён"
-                        : "Не удалось прочитать сохранённый API-ключ: " + rootMessage(failure));
-            }));
-        }
     }
 
     void show() {
