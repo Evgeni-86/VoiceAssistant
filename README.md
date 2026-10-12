@@ -44,6 +44,67 @@ cmake --build native\build --config Release
 
 Плагин JavaFX в `pom.xml` передаёт приложению путь к DLL через `java.library.path`. Класс `SystemAudioSource` вызывает `System.loadLibrary("WasapiCapture")` при создании сервиса записи, поэтому DLL нужна и для запуска с выбранным режимом «Микрофон». При запуске из IntelliJ IDEA укажите в VM options `-Djava.library.path=<абсолютный путь к native\release>`.
 
+## Сборка Portable-приложения для Windows
+
+Portable-версия создаётся через `jpackage` из JDK 25 и запускается двойным щелчком по `VoiceAssistant.exe`, без `start.cmd` и отдельно установленной Java. Для сборки заранее подготовьте `native\release\WasapiCapture.dll` и папку `whisper\` с `whisper-cli.exe`, `ggml-base.bin` и необходимыми DLL. В проекте должен присутствовать класс запуска `com.voiceassistant.Launcher`, не наследующийся от `javafx.application.Application`.
+
+Выполняйте команды по порядку в PowerShell из корня проекта.
+
+1. Соберите JAR и скопируйте Maven-зависимости:
+
+   ```powershell
+   .\mvnw.cmd clean package -DskipTests
+   .\mvnw.cmd dependency:copy-dependencies "-DoutputDirectory=target/dependency"
+   ```
+
+2. Подготовьте каталог входных файлов для `jpackage`:
+
+   ```powershell
+   New-Item -ItemType Directory -Path target\package-input -Force
+   Copy-Item target\voiceassistant-1.0-SNAPSHOT.jar target\package-input\
+   Copy-Item target\dependency\*.jar target\package-input\
+   ```
+
+3. Создайте приложение без консольного окна (не добавляйте `--win-console`):
+
+   ```powershell
+   jpackage `
+     --type app-image `
+     --name VoiceAssistant `
+     --input target\package-input `
+     --main-jar voiceassistant-1.0-SNAPSHOT.jar `
+     --main-class com.voiceassistant.Launcher `
+     --dest dist `
+     --java-options '-Djava.library.path=$APPDIR\..\native' `
+     --java-options '--enable-native-access=ALL-UNNAMED'
+   ```
+
+4. Скопируйте нативную библиотеку WASAPI и компоненты Whisper:
+
+   ```powershell
+   New-Item -ItemType Directory -Path dist\VoiceAssistant\native -Force
+   Copy-Item native\release\WasapiCapture.dll dist\VoiceAssistant\native\
+   Copy-Item whisper dist\VoiceAssistant\whisper -Recurse -Force
+   ```
+
+5. Проверьте наличие файлов:
+
+   ```powershell
+   Test-Path dist\VoiceAssistant\VoiceAssistant.exe
+   Test-Path dist\VoiceAssistant\native\WasapiCapture.dll
+   Test-Path dist\VoiceAssistant\whisper\whisper-cli.exe
+   Test-Path dist\VoiceAssistant\whisper\ggml-base.bin
+   ```
+
+   Все четыре команды должны вернуть `True`. Для запуска перейдите в папку приложения и откройте EXE:
+
+   ```powershell
+   Set-Location dist\VoiceAssistant
+   .\VoiceAssistant.exe
+   ```
+
+Готовая Portable-сборка находится в `dist\VoiceAssistant\`: рядом с `VoiceAssistant.exe` находятся каталоги `app\`, `runtime\`, `native\` и `whisper\`. Для переноса необходимо копировать **всю папку**. При текущей реализации поиск Whisper по умолчанию зависит от рабочей директории, поэтому запуск из другой рабочей директории может не найти файлы; при обычном запуске из папки приложения они доступны. Рекомендуется также проверить запуск двойным щелчком через Проводник. Для повторной сборки удалите или переименуйте старую папку `dist\VoiceAssistant\` после закрытия приложения.
+
 ## Настройка распознавания
 
 Откройте терминал разработчика Visual Studio в корне скачанного [whisper.cpp](https://github.com/ggml-org/whisper.cpp) и соберите программу распознавания:
