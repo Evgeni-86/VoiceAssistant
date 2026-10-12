@@ -12,4 +12,8 @@ public interface AiService {
      * Реализация должна регулярно проверять cancelled и прекращать выдачу фрагментов.
      */
     void streamMessage(String message, Consumer<String> onChunk, BooleanSupplier cancelled) throws Exception;
+
+    /** Закрывает активный сетевой поток при отмене. Локальным реализациям не требуется. */
+    default void cancelActive() {
+    }
 }
