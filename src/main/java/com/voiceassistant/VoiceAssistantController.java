@@ -16,6 +16,7 @@ import javafx.collections.ObservableList;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
@@ -104,7 +105,9 @@ final class VoiceAssistantController {
 
     void start(Stage stage) {
         this.stage = stage;
-        view = new MainView(stage, history, this::updateControls);
+        view = new MainView(stage, history, this::updateControls, this::saveResponseFontSize);
+        view.setResponseFontSize(settingsService.loadResponseFontSize(
+                (int) Math.round(view.aiResponseArea.getFont().getSize())));
         view.aiSettingsButton.setOnAction(event -> openSettings());
         view.recordButton.setOnAction(event -> startRecording());
         view.stopButton.setOnAction(event -> stopRecording(false));
@@ -167,6 +170,14 @@ final class VoiceAssistantController {
             }
             updateControls();
         }));
+    }
+
+    private void saveResponseFontSize(int size) {
+        try {
+            settingsService.saveResponseFontSize(size);
+        } catch (IOException error) {
+            view.statusLabel.setText("Не удалось сохранить размер шрифта ответа: " + error.getMessage());
+        }
     }
 
     private void openSettings() {

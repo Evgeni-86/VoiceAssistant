@@ -21,12 +21,14 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.scene.text.Font;
 import javafx.scene.text.Text;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.function.IntConsumer;
 
 final class MainView {
     private static final DateTimeFormatter HISTORY_TIME_FORMAT =
@@ -45,12 +47,15 @@ final class MainView {
     final Button sendToAiButton;
     final TextArea transcriptArea;
     final TextArea aiResponseArea;
+    private final Button decreaseResponseFontButton;
+    private final Button increaseResponseFontButton;
     final ListView<AiHistoryEntry> historyListView;
     private final Label historyInfoLabel;
     private final TextArea historyRequestArea;
     private final TextArea historyResponseArea;
 
-    MainView(Stage stage, ObservableList<AiHistoryEntry> history, Runnable controlsChanged) {
+    MainView(Stage stage, ObservableList<AiHistoryEntry> history, Runnable controlsChanged,
+             IntConsumer responseFontSizeChanged) {
         statusLabel = new Label("Готов к записи");
         statusLabel.setWrapText(true);
         statusLabel.setMaxWidth(Double.MAX_VALUE);
@@ -87,6 +92,13 @@ final class MainView {
         aiResponseArea.setWrapText(true);
         aiResponseArea.setPromptText("Здесь появится тестовый ответ ИИ");
         aiResponseArea.setPrefRowCount(5);
+        decreaseResponseFontButton = new Button("A−");
+        increaseResponseFontButton = new Button("A+");
+        decreaseResponseFontButton.setPadding(new Insets(2, 6, 2, 6));
+        increaseResponseFontButton.setPadding(new Insets(2, 6, 2, 6));
+        decreaseResponseFontButton.setOnAction(event -> changeResponseFontSize(-1, responseFontSizeChanged));
+        increaseResponseFontButton.setOnAction(event -> changeResponseFontSize(1, responseFontSizeChanged));
+        setResponseFontSize((int) Math.round(aiResponseArea.getFont().getSize()));
 
         historyListView = new ListView<>(history);
         historyListView.setPlaceholder(new Label("История запросов пуста"));
@@ -148,12 +160,19 @@ final class MainView {
         HBox aiHeader = new HBox(12, aiStatusLabel, sendToAiButton);
         aiHeader.setAlignment(Pos.CENTER_LEFT);
 
+        Label responseLabel = new Label("Ответ ИИ:");
+        responseLabel.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(responseLabel, Priority.ALWAYS);
+        HBox responseHeader = new HBox(4, responseLabel,
+                decreaseResponseFontButton, increaseResponseFontButton);
+        responseHeader.setAlignment(Pos.CENTER_LEFT);
+
         VBox currentRequestContent = new VBox(
                 12,
                 transcriptHeader,
                 transcriptArea,
                 aiHeader,
-                new Label("Ответ ИИ:"),
+                responseHeader,
                 aiResponseArea
         );
         currentRequestContent.setPadding(new Insets(6, 6, 6, 6));
@@ -179,8 +198,8 @@ final class MainView {
         TabPane tabPane = new TabPane(currentRequestTab, historyTab);
         VBox.setVgrow(tabPane, Priority.ALWAYS);
 
-        HBox stopActions = new HBox(12, stopButton, finishAndSendButton);
-        stopActions.setAlignment(Pos.CENTER);
+        HBox recordActions = new HBox(12, recordButton, stopButton, finishAndSendButton);
+        recordActions.setAlignment(Pos.CENTER);
 
         HBox sourceSelector = new HBox(12, new Label("Источник записи:"), sourceComboBox);
         sourceSelector.setAlignment(Pos.CENTER);
@@ -194,8 +213,7 @@ final class MainView {
                 12,
                 topBar,
                 sourceSelector,
-                recordButton,
-                stopActions,
+                recordActions,
                 tabPane,
                 statusLabel
         );
@@ -208,6 +226,19 @@ final class MainView {
         stage.setScene(scene);
         stage.setMinWidth(620);
         stage.setMinHeight(680);
+    }
+
+    void setResponseFontSize(int size) {
+        int boundedSize = Math.clamp(size, 10, 30);
+        aiResponseArea.setFont(Font.font(aiResponseArea.getFont().getFamily(), boundedSize));
+        decreaseResponseFontButton.setDisable(boundedSize == 10);
+        increaseResponseFontButton.setDisable(boundedSize == 30);
+    }
+
+    private void changeResponseFontSize(int delta, IntConsumer onChanged) {
+        int size = (int) Math.round(aiResponseArea.getFont().getSize()) + delta;
+        setResponseFontSize(size);
+        onChanged.accept(size);
     }
 
     void show(Stage stage) {

@@ -14,6 +14,7 @@ import java.util.List;
 
 /** Пользовательская конфигурация и отдельно защищённый DPAPI ключ. */
 public final class AiSettingsService {
+    private static final String RESPONSE_FONT_SIZE = "responseFontSize";
     private final Path settingsFile;
     private final Map<AiMode, WindowsDpapiSecretStore> secretStores;
 
@@ -45,6 +46,36 @@ public final class AiSettingsService {
         }
     }
 
+    public int loadResponseFontSize(int defaultSize) {
+        if (!Files.exists(settingsFile)) return defaultSize;
+        Properties properties = new Properties();
+        try (InputStream input = Files.newInputStream(settingsFile)) {
+            properties.load(input);
+            int size = Integer.parseInt(properties.getProperty(RESPONSE_FONT_SIZE,
+                    Integer.toString(defaultSize)));
+            return Math.clamp(size, 10, 30);
+        } catch (IOException | IllegalArgumentException exception) {
+            return defaultSize;
+        }
+    }
+
+    public synchronized void saveResponseFontSize(int size) throws IOException {
+        Properties properties = new Properties();
+        if (Files.exists(settingsFile)) {
+            try (InputStream input = Files.newInputStream(settingsFile)) {
+                properties.load(input);
+            }
+        } else {
+            AiSettings defaults = AiSettings.defaults();
+            properties.setProperty("mode", defaults.mode().name());
+            properties.setProperty("deepSeekModel", defaults.deepSeekModel());
+            properties.setProperty("openRouterModel", defaults.openRouterModel());
+            properties.setProperty("systemPrompt", defaults.systemPrompt());
+        }
+        properties.setProperty(RESPONSE_FONT_SIZE, Integer.toString(Math.clamp(size, 10, 30)));
+        writeProperties(properties);
+    }
+
     public boolean hasApiKey(AiMode mode) {
         return store(mode).exists();
     }
@@ -72,26 +103,35 @@ public final class AiSettingsService {
                 }
             }
             Properties properties = new Properties();
+            if (Files.exists(settingsFile)) {
+                try (InputStream input = Files.newInputStream(settingsFile)) {
+                    properties.load(input);
+                }
+            }
             properties.setProperty("mode", settings.mode().name());
             properties.setProperty("deepSeekModel", settings.deepSeekModel());
             properties.setProperty("openRouterModel", settings.openRouterModel());
             properties.setProperty("systemPrompt", settings.systemPrompt());
-            Files.createDirectories(settingsFile.getParent());
-            Path temporary = Files.createTempFile(settingsFile.getParent(), "ai-settings-", ".tmp");
-            try {
-                try (OutputStream output = Files.newOutputStream(temporary)) {
-                    properties.store(output, "VoiceAssistant AI settings");
-                }
-                move(temporary, settingsFile);
-            } finally {
-                Files.deleteIfExists(temporary);
-            }
+            writeProperties(properties);
         } catch (IOException | RuntimeException exception) {
             for (var previous : previousKeys.entrySet()) {
                 try { store(previous.getKey()).restore(previous.getValue()); }
                 catch (IOException rollbackError) { exception.addSuppressed(rollbackError); }
             }
             throw new IOException("Не удалось сохранить настройки ИИ.", exception);
+        }
+    }
+
+    private void writeProperties(Properties properties) throws IOException {
+        Files.createDirectories(settingsFile.getParent());
+        Path temporary = Files.createTempFile(settingsFile.getParent(), "ai-settings-", ".tmp");
+        try {
+            try (OutputStream output = Files.newOutputStream(temporary)) {
+                properties.store(output, "VoiceAssistant AI settings");
+            }
+            move(temporary, settingsFile);
+        } finally {
+            Files.deleteIfExists(temporary);
         }
     }
 
