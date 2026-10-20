@@ -3,11 +3,8 @@ package com.voiceassistant.ai;
 import java.net.http.HttpClient;
 import java.time.Duration;
 
-/** Единственная точка выбора реализации; DeepSeek можно подключить здесь позднее. */
+/** Единственная точка выбора реализации ИИ. */
 public final class AiServiceSelector {
-    public static final String DEEPSEEK_UNAVAILABLE =
-            "Интеграция DeepSeek API пока не реализована. Выберите Stub или OpenRouter.";
-
     private final AiService stubService = new StubAiService();
     private final AiService openAiAudioStub = new OpenAiAudioStubService();
     private final HttpClient httpClient = HttpClient.newBuilder()
@@ -25,7 +22,7 @@ public final class AiServiceSelector {
         return switch (settings.mode()) {
             case STUB -> stubService;
             case OPENROUTER -> new OpenRouterAiService(settings, settingsService, httpClient);
-            case DEEPSEEK -> throw new IllegalStateException(DEEPSEEK_UNAVAILABLE);
+            case DEEPSEEK -> new DeepSeekAiService(settings, settingsService, httpClient);
             case OPENAI_AUDIO -> openAiAudioStub;
         };
     }
