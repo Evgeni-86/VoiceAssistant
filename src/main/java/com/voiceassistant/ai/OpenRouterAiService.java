@@ -78,7 +78,7 @@ public final class OpenRouterAiService implements AiService {
             activeBody.set(body);
             checkCancelled(cancelled);
             if (response.statusCode() != 200) {
-                throw new IOException(httpError(response.statusCode()));
+                throw new IOException(httpError(response.statusCode(), body));
             }
             readEvents(body, onChunk, cancelled);
         } catch (InterruptedException error) {
@@ -206,8 +206,8 @@ public final class OpenRouterAiService implements AiService {
         return new IOException("Ошибка соединения с OpenRouter.", error);
     }
 
-    private static String httpError(int status) {
-        return switch (status) {
+    private static String httpError(int status, InputStream body) {
+        String fallback = switch (status) {
             case 400 -> "OpenRouter отклонил запрос: проверьте настройки модели.";
             case 401 -> "Неверный API-ключ OpenRouter. Проверьте настройки ИИ.";
             case 402 -> "Недостаточно средств или кредитов OpenRouter.";
@@ -219,5 +219,19 @@ public final class OpenRouterAiService implements AiService {
             case 503 -> "Модель или провайдер OpenRouter временно недоступны.";
             default -> "OpenRouter вернул HTTP " + status + ".";
         };
+        try {
+            JsonNode response = JSON.readTree(body.readNBytes(16 * 1024));
+            if (response == null) return fallback;
+            JsonNode error = response.path("error");
+            String message = error.isTextual() ? error.textValue() : error.path("message").asText(null);
+            if (message != null && !message.isBlank()) {
+                String detail = message.replaceAll("[\\p{Cntrl}\\s]+", " ").trim();
+                if (detail.length() > 500) detail = detail.substring(0, 500) + "…";
+                return "OpenRouter HTTP " + status + ": " + detail;
+            }
+        } catch (IOException ignored) {
+            // При пустом или некорректном теле ответа показываем сообщение по HTTP-статусу.
+        }
+        return fallback;
     }
 }
