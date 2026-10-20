@@ -202,17 +202,17 @@ final class MainView {
         recordActions.setAlignment(Pos.CENTER);
 
         HBox sourceSelector = new HBox(12, new Label("Источник записи:"), sourceComboBox);
-        sourceSelector.setAlignment(Pos.CENTER);
+        sourceSelector.setAlignment(Pos.CENTER_LEFT);
 
-        Region topSpacer = new Region();
-        HBox.setHgrow(topSpacer, Priority.ALWAYS);
-        HBox topBar = new HBox(8, topSpacer, aiModeLabel, aiSettingsButton);
-        topBar.setAlignment(Pos.CENTER_RIGHT);
+        Region settingsSpacer = new Region();
+        HBox.setHgrow(settingsSpacer, Priority.ALWAYS);
+        HBox sourceAndSettings = new HBox(8,
+                sourceSelector, settingsSpacer, aiModeLabel, aiSettingsButton);
+        sourceAndSettings.setAlignment(Pos.CENTER_LEFT);
 
         VBox root = new VBox(
                 12,
-                topBar,
-                sourceSelector,
+                sourceAndSettings,
                 recordActions,
                 tabPane,
                 statusLabel
