@@ -3,7 +3,8 @@ package com.voiceassistant.ai;
 public enum AiMode {
     STUB("Stub (тестовый режим)"),
     OPENROUTER("OpenRouter API"),
-    DEEPSEEK("DeepSeek API");
+    DEEPSEEK("DeepSeek API"),
+    OPENAI_AUDIO("OpenAI Audio");
 
     private final String label;
 

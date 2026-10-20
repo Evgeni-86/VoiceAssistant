@@ -26,7 +26,8 @@ public final class AiSettingsService {
         settingsFile = directory.resolve("ai-settings.properties");
         secretStores = Map.of(
                 AiMode.DEEPSEEK, new WindowsDpapiSecretStore(directory.resolve("deepseek-key.dpapi")),
-                AiMode.OPENROUTER, new WindowsDpapiSecretStore(directory.resolve("openrouter-key.dpapi")));
+                AiMode.OPENROUTER, new WindowsDpapiSecretStore(directory.resolve("openrouter-key.dpapi")),
+                AiMode.OPENAI_AUDIO, new WindowsDpapiSecretStore(directory.resolve("openai-audio-key.dpapi")));
     }
 
     public AiSettings load() throws IOException {
@@ -40,6 +41,7 @@ public final class AiSettingsService {
                     AiMode.valueOf(properties.getProperty("mode")),
                     properties.getProperty("deepSeekModel", properties.getProperty("model", AiSettings.DEEPSEEK_MODELS.getFirst())),
                     properties.getProperty("openRouterModel", AiSettings.OPENROUTER_MODELS.getFirst()),
+                    properties.getProperty("openAiAudioModel", AiSettings.OPENAI_AUDIO_MODELS.getFirst()),
                     properties.getProperty("systemPrompt"));
         } catch (RuntimeException exception) {
             throw new IOException("Файл настроек ИИ повреждён или содержит неподдерживаемое значение.", exception);
@@ -70,6 +72,7 @@ public final class AiSettingsService {
             properties.setProperty("mode", defaults.mode().name());
             properties.setProperty("deepSeekModel", defaults.deepSeekModel());
             properties.setProperty("openRouterModel", defaults.openRouterModel());
+            properties.setProperty("openAiAudioModel", defaults.openAiAudioModel());
             properties.setProperty("systemPrompt", defaults.systemPrompt());
         }
         properties.setProperty(RESPONSE_FONT_SIZE, Integer.toString(Math.clamp(size, 10, 30)));
@@ -93,7 +96,7 @@ public final class AiSettingsService {
                                   Set<AiMode> deletedKeys) throws IOException {
         Map<AiMode, byte[]> previousKeys = new java.util.EnumMap<>(AiMode.class);
         try {
-            for (AiMode mode : List.of(AiMode.OPENROUTER, AiMode.DEEPSEEK)) {
+            for (AiMode mode : List.of(AiMode.OPENROUTER, AiMode.DEEPSEEK, AiMode.OPENAI_AUDIO)) {
                 String newKey = newKeys.get(mode);
                 if (deletedKeys.contains(mode) || newKey != null && !newKey.isBlank()) {
                     WindowsDpapiSecretStore secretStore = store(mode);
@@ -111,6 +114,7 @@ public final class AiSettingsService {
             properties.setProperty("mode", settings.mode().name());
             properties.setProperty("deepSeekModel", settings.deepSeekModel());
             properties.setProperty("openRouterModel", settings.openRouterModel());
+            properties.setProperty("openAiAudioModel", settings.openAiAudioModel());
             properties.setProperty("systemPrompt", settings.systemPrompt());
             writeProperties(properties);
         } catch (IOException | RuntimeException exception) {

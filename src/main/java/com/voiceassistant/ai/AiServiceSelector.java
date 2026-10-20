@@ -9,6 +9,7 @@ public final class AiServiceSelector {
             "Интеграция DeepSeek API пока не реализована. Выберите Stub или OpenRouter.";
 
     private final AiService stubService = new StubAiService();
+    private final AiService openAiAudioStub = new OpenAiAudioStubService();
     private final HttpClient httpClient = HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_2)
             .connectTimeout(Duration.ofSeconds(20))
@@ -25,6 +26,7 @@ public final class AiServiceSelector {
             case STUB -> stubService;
             case OPENROUTER -> new OpenRouterAiService(settings, settingsService, httpClient);
             case DEEPSEEK -> throw new IllegalStateException(DEEPSEEK_UNAVAILABLE);
+            case OPENAI_AUDIO -> openAiAudioStub;
         };
     }
 

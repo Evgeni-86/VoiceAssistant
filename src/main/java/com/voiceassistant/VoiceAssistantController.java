@@ -113,12 +113,14 @@ final class VoiceAssistantController {
         view.stopButton.setOnAction(event -> stopRecording(false));
         view.finishAndSendButton.setOnAction(event -> stopRecording(true));
         view.transcribeButton.setOnAction(event -> {
-            if (state == State.IDLE && lastRecording != null) {
+            if (state == State.IDLE && lastRecording != null && settings != null
+                    && settings.mode() != AiMode.OPENAI_AUDIO) {
                 transcribe(lastRecording, false);
             }
         });
         view.sendToAiButton.setOnAction(event -> {
-            if (state == State.IDLE && !view.transcriptArea.getText().isBlank()) {
+            if (state == State.IDLE && settings != null && settings.mode() != AiMode.OPENAI_AUDIO
+                    && !view.transcriptArea.getText().isBlank()) {
                 sendToAi(view.transcriptArea.getText().trim(), false);
             }
         });
@@ -201,8 +203,10 @@ final class VoiceAssistantController {
         view.sourceComboBox.setDisable(!idle);
         view.stopButton.setDisable(!recording);
         view.finishAndSendButton.setDisable(!recording || settings == null);
-        view.transcribeButton.setDisable(!idle || lastRecording == null);
-        view.sendToAiButton.setDisable(!idle || settings == null || view.transcriptArea.getText().isBlank());
+        boolean audioMode = settings != null && settings.mode() == AiMode.OPENAI_AUDIO;
+        view.transcribeButton.setDisable(!idle || lastRecording == null || audioMode);
+        view.sendToAiButton.setDisable(!idle || settings == null || audioMode
+                || view.transcriptArea.getText().isBlank());
         view.transcriptArea.setEditable(idle);
     }
 
@@ -258,7 +262,8 @@ final class VoiceAssistantController {
         if (automatic) {
             view.transcriptArea.clear();
             view.aiResponseArea.clear();
-            view.aiStatusLabel.setText("ИИ: ожидает распознавания речи");
+            view.aiStatusLabel.setText(settings.mode() == AiMode.OPENAI_AUDIO
+                    ? "ИИ: ожидает обработку аудио" : "ИИ: ожидает распознавания речи");
         }
         updateControls();
 
@@ -278,7 +283,11 @@ final class VoiceAssistantController {
 
             lastRecording = path;
             if (automatic) {
-                transcribe(path, true);
+                if (settings.mode() == AiMode.OPENAI_AUDIO) {
+                    sendAiRequest("Аудиозапись: " + path.getFileName(), true, path);
+                } else {
+                    transcribe(path, true);
+                }
             } else {
                 state = State.IDLE;
                 view.statusLabel.setText("Сохранено: " + path);
@@ -331,7 +340,12 @@ final class VoiceAssistantController {
     }
 
     private void sendToAi(String message, boolean automatic) {
-        if (activeAiRequest != null || (state != State.IDLE && state != State.AUTO_TRANSCRIBING)) {
+        sendAiRequest(message, automatic, null);
+    }
+
+    private void sendAiRequest(String message, boolean automatic, Path audio) {
+        if (activeAiRequest != null || (state != State.IDLE && state != State.AUTO_TRANSCRIBING
+                && !(audio != null && state == State.AUTO_STOPPING))) {
             return;
         }
         if (!aiAvailable()) {
@@ -340,6 +354,7 @@ final class VoiceAssistantController {
             return;
         }
         AiService aiService = aiServiceSelector.serviceFor(settings);
+        AiSettings requestSettings = settings;
         AiHistoryEntry entry = new AiHistoryEntry(message);
         AiRequest request = new AiRequest(entry, aiService, automatic);
         activeAiRequest = request;
@@ -363,7 +378,12 @@ final class VoiceAssistantController {
             request.task = aiExecutor.submit(() -> {
                 Throwable failure = null;
                 try {
-                    aiService.streamMessage(message, request::accept, request.cancelled::get);
+                    if (audio == null) {
+                        aiService.streamMessage(message, request::accept, request.cancelled::get);
+                    } else {
+                        aiService.streamAudio(audio, requestSettings, settingsService,
+                                request::accept, request.cancelled::get);
+                    }
                 } catch (InterruptedException error) {
                     Thread.currentThread().interrupt();
                     failure = new CancellationException("Генерация ответа отменена");
@@ -442,7 +462,7 @@ final class VoiceAssistantController {
 
     private boolean aiAvailable() {
         if (settings == null) return false;
-        if (settings.mode() == AiMode.STUB) return true;
+        if (settings.mode() == AiMode.STUB || settings.mode() == AiMode.OPENAI_AUDIO) return true;
         if (settings.mode() == AiMode.DEEPSEEK) {
             view.aiStatusLabel.setText(AiServiceSelector.DEEPSEEK_UNAVAILABLE);
             return false;
@@ -459,6 +479,7 @@ final class VoiceAssistantController {
             case STUB -> "Stub";
             case OPENROUTER -> "OpenRouter";
             case DEEPSEEK -> "DeepSeek";
+            case OPENAI_AUDIO -> "OpenAI Audio";
         };
     }
 

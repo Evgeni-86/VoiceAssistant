@@ -1,5 +1,6 @@
 package com.voiceassistant.ai;
 
+import java.nio.file.Path;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
@@ -12,6 +13,12 @@ public interface AiService {
      * Реализация должна регулярно проверять cancelled и прекращать выдачу фрагментов.
      */
     void streamMessage(String message, Consumer<String> onChunk, BooleanSupplier cancelled) throws Exception;
+
+    /** Прямая передача WAV аудиосервису; настройки и хранилище доступны будущей реализации API. */
+    default void streamAudio(Path wav, AiSettings settings, AiSettingsService settingsService,
+                             Consumer<String> onChunk, BooleanSupplier cancelled) throws Exception {
+        throw new UnsupportedOperationException("Этот режим не принимает аудио напрямую.");
+    }
 
     /** Закрывает активный сетевой поток при отмене. Локальным реализациям не требуется. */
     default void cancelActive() {

@@ -42,9 +42,11 @@ final class AiSettingsDialog {
         model.setMaxWidth(Double.MAX_VALUE);
         final String[] deepSeekModel = {current.deepSeekModel()};
         final String[] openRouterModel = {current.openRouterModel()};
+        final String[] openAiAudioModel = {current.openAiAudioModel()};
         model.valueProperty().addListener((obs, oldValue, value) -> {
             if (value == null) return;
             if (mode.getValue() == AiMode.OPENROUTER) openRouterModel[0] = value;
+            else if (mode.getValue() == AiMode.OPENAI_AUDIO) openAiAudioModel[0] = value;
             else deepSeekModel[0] = value;
         });
 
@@ -57,9 +59,16 @@ final class AiSettingsDialog {
         java.util.Set<AiMode> deletedKeys = java.util.EnumSet.noneOf(AiMode.class);
         Runnable updateProvider = () -> {
             AiMode selected = mode.getValue();
-            model.getItems().setAll(selected == AiMode.OPENROUTER
-                    ? AiSettings.OPENROUTER_MODELS : AiSettings.DEEPSEEK_MODELS);
-            model.setValue(selected == AiMode.OPENROUTER ? openRouterModel[0] : deepSeekModel[0]);
+            model.getItems().setAll(switch (selected) {
+                case OPENROUTER -> AiSettings.OPENROUTER_MODELS;
+                case OPENAI_AUDIO -> AiSettings.OPENAI_AUDIO_MODELS;
+                case STUB, DEEPSEEK -> AiSettings.DEEPSEEK_MODELS;
+            });
+            model.setValue(switch (selected) {
+                case OPENROUTER -> openRouterModel[0];
+                case OPENAI_AUDIO -> openAiAudioModel[0];
+                case STUB, DEEPSEEK -> deepSeekModel[0];
+            });
             model.setDisable(selected == AiMode.STUB);
             boolean usesKey = selected != AiMode.STUB;
             keyTitle.setVisible(usesKey);
@@ -71,7 +80,12 @@ final class AiSettingsDialog {
             keyState.setManaged(usesKey);
             removeKey.setManaged(usesKey);
             if (usesKey) {
-                String provider = selected == AiMode.OPENROUTER ? "OpenRouter" : "DeepSeek";
+                String provider = switch (selected) {
+                    case OPENROUTER -> "OpenRouter";
+                    case DEEPSEEK -> "DeepSeek";
+                    case OPENAI_AUDIO -> "OpenAI Audio";
+                    case STUB -> throw new IllegalStateException();
+                };
                 keyTitle.setText("API-ключ " + provider);
                 keyField.setPromptText("Новый API-ключ " + provider);
                 keyField.setText(newKeys.getOrDefault(selected, ""));
@@ -125,7 +139,8 @@ final class AiSettingsDialog {
         save.setOnAction(event -> {
             AiSettings settings;
             try {
-                settings = new AiSettings(mode.getValue(), deepSeekModel[0], openRouterModel[0], prompt.getText());
+                settings = new AiSettings(mode.getValue(), deepSeekModel[0], openRouterModel[0],
+                        openAiAudioModel[0], prompt.getText());
             } catch (IllegalArgumentException | NullPointerException validationError) {
                 error.setText(validationError.getMessage() == null
                         ? "Заполните все настройки ИИ." : validationError.getMessage());
