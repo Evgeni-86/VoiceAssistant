@@ -76,7 +76,7 @@ final class MainView {
 
         transcriptArea = new TextArea();
         transcriptArea.setWrapText(true);
-        transcriptArea.setPromptText("Здесь появится текст записи");
+        transcriptArea.setPromptText("Здесь появится распознанный вопрос");
         transcriptArea.setPrefRowCount(1);
         transcriptArea.setMinHeight(Region.USE_PREF_SIZE);
         transcriptArea.setMaxHeight(Region.USE_PREF_SIZE);
@@ -147,7 +147,7 @@ final class MainView {
             }
         });
 
-        Label transcriptLabel = new Label("Распознанный текст:");
+        Label transcriptLabel = new Label("Распознанный вопрос:");
         transcriptLabel.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(transcriptLabel, Priority.ALWAYS);
         HBox transcriptHeader = new HBox(12, transcriptLabel, transcribeButton);

@@ -324,6 +324,7 @@ final class VoiceAssistantController {
 
     private void transcribe(Path recording, boolean automatic) {
         state = automatic ? State.AUTO_TRANSCRIBING : State.TRANSCRIBING;
+        view.transcriptArea.clear();
         view.statusLabel.setText(automatic ? "Распознавание речи..." : "Распознаём речь...");
         updateControls();
 
