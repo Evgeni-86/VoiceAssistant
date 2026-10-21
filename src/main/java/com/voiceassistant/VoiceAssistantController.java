@@ -28,8 +28,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 final class VoiceAssistantController {
+    private static final Logger LOG = LoggerFactory.getLogger(VoiceAssistantController.class);
     private enum State {
         IDLE, STARTING, RECORDING, STOPPING, TRANSCRIBING, SENDING_AI,
         AUTO_STOPPING, AUTO_TRANSCRIBING, AUTO_SENDING_AI, CLOSING
@@ -64,6 +69,7 @@ final class VoiceAssistantController {
 
     private static final class AiRequest {
         final AiHistoryEntry entry;
+        final String requestId;
         final AiService service;
         final boolean automatic;
         final AtomicBoolean cancelled = new AtomicBoolean();
@@ -71,10 +77,11 @@ final class VoiceAssistantController {
         final StringBuilder pending = new StringBuilder();
         Future<?> task;
 
-        AiRequest(AiHistoryEntry entry, AiService service, boolean automatic) {
+        AiRequest(AiHistoryEntry entry, AiService service, boolean automatic, String requestId) {
             this.entry = entry;
             this.service = service;
             this.automatic = automatic;
+            this.requestId = requestId;
         }
 
         void accept(String chunk) {
@@ -147,6 +154,7 @@ final class VoiceAssistantController {
             CompletableFuture.runAsync(recordingService::close)
                     .whenComplete((result, error) -> Platform.runLater(() -> {
                         if (error != null) {
+                            LOG.error("Application shutdown failed, errorType={}", error.getClass().getName());
                             System.err.println("Ошибка завершения приложения: " + error.getMessage());
                         }
                         stage.setOnCloseRequest(null);
@@ -170,6 +178,14 @@ final class VoiceAssistantController {
             settings = error == null ? loaded : AiSettings.defaults();
             view.aiModeLabel.setText("ИИ: " + modeName(settings.mode()));
             if (error != null) {
+                Throwable source = error;
+                while (source instanceof CompletionException && source.getCause() != null) {
+                    source = source.getCause();
+                }
+                IllegalStateException diagnostic = new IllegalStateException(
+                        "Settings initialization failed, errorType=" + source.getClass().getName());
+                diagnostic.setStackTrace(source.getStackTrace());
+                LOG.error("Settings initialization failed", diagnostic);
                 view.statusLabel.setText("Не удалось загрузить настройки ИИ: " + errorMessage(error)
                         + " Используются значения по умолчанию.");
             }
@@ -181,6 +197,7 @@ final class VoiceAssistantController {
         try {
             settingsService.saveResponseFontSize(size);
         } catch (IOException error) {
+            LOG.error("Response font size save failed, errorType={}", error.getClass().getName());
             view.statusLabel.setText("Не удалось сохранить размер шрифта ответа: " + error.getMessage());
         }
     }
@@ -191,6 +208,9 @@ final class VoiceAssistantController {
             return;
         }
         settingsDialog = new AiSettingsDialog(stage, settings, settingsService, settingsExecutor, saved -> {
+            if (settings != null && settings.mode() != saved.mode()) {
+                LOG.info("AI mode changed, from={}, to={}", settings.mode(), saved.mode());
+            }
             settings = saved;
             view.aiModeLabel.setText("ИИ: " + modeName(saved.mode()));
             updateControls();
@@ -356,10 +376,19 @@ final class VoiceAssistantController {
             updateControls();
             return;
         }
-        AiService aiService = aiServiceSelector.serviceFor(settings, contextService.snapshot(settings));
+        String requestId = UUID.randomUUID().toString();
+        MDC.put("requestId", requestId);
+        AiService aiService;
+        try {
+            LOG.debug("AI data preparation started");
+            aiService = aiServiceSelector.serviceFor(settings, contextService.snapshot(settings));
+            LOG.debug("AI context preparation completed");
+        } finally {
+            MDC.remove("requestId");
+        }
         AiSettings requestSettings = settings;
         AiHistoryEntry entry = new AiHistoryEntry(message, audio == null);
-        AiRequest request = new AiRequest(entry, aiService, automatic);
+        AiRequest request = new AiRequest(entry, aiService, automatic, requestId);
         activeAiRequest = request;
         history.add(0, entry);
         if (view.historyListView.getSelectionModel().getSelectedItem() == null) {
@@ -379,6 +408,7 @@ final class VoiceAssistantController {
         aiFlushTimer.play();
         try {
             request.task = aiExecutor.submit(() -> {
+                MDC.put("requestId", request.requestId);
                 Throwable failure = null;
                 try {
                     if (audio == null) {
@@ -392,11 +422,19 @@ final class VoiceAssistantController {
                     failure = new CancellationException("Генерация ответа отменена");
                 } catch (Throwable error) {
                     failure = error;
+                    if (error instanceof CancellationException) {
+                        LOG.warn("AI request cancelled");
+                    } else {
+                        LOG.error("AI request failed, errorType={}", error.getClass().getName());
+                    }
+                } finally {
+                    MDC.remove("requestId");
                 }
                 Throwable result = failure;
                 Platform.runLater(() -> finishAiRequest(request, result));
             });
         } catch (RejectedExecutionException error) {
+            LOG.error("AI executor rejected request, errorType={}", error.getClass().getName());
             finishAiRequest(request, error);
         }
     }
@@ -416,6 +454,15 @@ final class VoiceAssistantController {
     }
 
     private void finishAiRequest(AiRequest request, Throwable failure) {
+        MDC.put("requestId", request.requestId);
+        try {
+            finishAiRequestOnFx(request, failure);
+        } finally {
+            MDC.remove("requestId");
+        }
+    }
+
+    private void finishAiRequestOnFx(AiRequest request, Throwable failure) {
         if (!request.finished.compareAndSet(false, true)) {
             return;
         }
@@ -447,6 +494,7 @@ final class VoiceAssistantController {
             }
         } else {
             entry.complete();
+            LOG.debug("AI response processing completed");
             if (state != State.CLOSING) {
                 view.aiStatusLabel.setText("Ответ ИИ получен.");
                 if (request.automatic) {

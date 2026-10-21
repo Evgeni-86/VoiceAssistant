@@ -46,6 +46,16 @@ cmake --build native\build --config Release
 
 ## Сборка Portable-приложения для Windows
 
+Логи записываются в `%LOCALAPPDATA%\VoiceAssistant\logs\voice-assistant.log` (при отсутствии
+`LOCALAPPDATA` — в `%USERPROFILE%\VoiceAssistant\logs`). Файл достигает 5 МБ, после чего
+архивируется; хранятся пять архивов `voice-assistant.1.log.gz` —
+`voice-assistant.5.log.gz`. Уровень по умолчанию — INFO. Для диагностики добавьте
+`-Dvoiceassistant.log.level=DEBUG` к параметрам JVM в IDE или строку
+`java-options=-Dvoiceassistant.log.level=DEBUG` в секцию `[JavaOptions]` файла
+`dist\VoiceAssistant\app\VoiceAssistant.cfg` после упаковки. Для произвольной
+конфигурации Logback доступен стандартный параметр JVM
+`-Dlogback.configurationFile=<путь к файлу>`.
+
 Portable-версия создаётся через `jpackage` из JDK 25 и запускается двойным щелчком по `VoiceAssistant.exe`, без `start.cmd` и отдельно установленной Java. Для сборки заранее подготовьте `native\release\WasapiCapture.dll` и папку `whisper\` с `whisper-cli.exe`, `ggml-base.bin` и необходимыми DLL. В проекте должен присутствовать класс запуска `com.voiceassistant.Launcher`, не наследующийся от `javafx.application.Application`.
 
 Выполняйте команды по порядку в PowerShell из корня проекта.

@@ -11,9 +11,12 @@ import java.util.Properties;
 import java.util.Map;
 import java.util.Set;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Пользовательская конфигурация и отдельно защищённый DPAPI ключ. */
 public final class AiSettingsService {
+    private static final Logger LOG = LoggerFactory.getLogger(AiSettingsService.class);
     private static final String RESPONSE_FONT_SIZE = "responseFontSize";
     private final Path settingsFile;
     private final Map<AiMode, WindowsDpapiSecretStore> secretStores;
@@ -32,12 +35,13 @@ public final class AiSettingsService {
 
     public AiSettings load() throws IOException {
         if (!Files.exists(settingsFile)) {
+            LOG.info("Settings loaded: defaults");
             return AiSettings.defaults();
         }
         Properties properties = new Properties();
         try (InputStream input = Files.newInputStream(settingsFile)) {
             properties.load(input);
-            return new AiSettings(
+            AiSettings loaded = new AiSettings(
                     AiMode.valueOf(properties.getProperty("mode")),
                     properties.getProperty("deepSeekModel", properties.getProperty("model", AiSettings.DEEPSEEK_MODELS.getFirst())),
                     properties.getProperty("openRouterModel", AiSettings.OPENROUTER_MODELS.getFirst()),
@@ -46,6 +50,10 @@ public final class AiSettingsService {
                     properties.getProperty("systemPrompt"),
                     Boolean.parseBoolean(properties.getProperty("useConversationContext", "false")),
                     Integer.parseInt(properties.getProperty("contextDepth", "3")));
+            LOG.info("Settings loaded, mode={}", loaded.mode());
+            LOG.debug("Settings model selected, model={}", selectedModel(loaded));
+            LOG.debug("Context settings, enabled={}, depth={}", loaded.useConversationContext(), loaded.contextDepth());
+            return loaded;
         } catch (RuntimeException exception) {
             throw new IOException("Файл настроек ИИ повреждён или содержит неподдерживаемое значение.", exception);
         }
@@ -124,13 +132,27 @@ public final class AiSettingsService {
             properties.setProperty("useConversationContext", Boolean.toString(settings.useConversationContext()));
             properties.setProperty("contextDepth", Integer.toString(settings.contextDepth()));
             writeProperties(properties);
+            LOG.info("Settings saved, mode={}", settings.mode());
+            LOG.debug("Settings model selected, model={}", selectedModel(settings));
+            LOG.debug("Context settings, enabled={}, depth={}", settings.useConversationContext(), settings.contextDepth());
         } catch (IOException | RuntimeException exception) {
+            LOG.error("Settings save failed, errorType={}", exception.getClass().getName());
             for (var previous : previousKeys.entrySet()) {
                 try { store(previous.getKey()).restore(previous.getValue()); }
                 catch (IOException rollbackError) { exception.addSuppressed(rollbackError); }
             }
             throw new IOException("Не удалось сохранить настройки ИИ.", exception);
         }
+    }
+
+    private static String selectedModel(AiSettings settings) {
+        return switch (settings.mode()) {
+            case DEEPSEEK -> settings.deepSeekModel();
+            case OPENROUTER -> settings.openRouterModel();
+            case OPENROUTER_AUDIO -> settings.openRouterAudioModel();
+            case OPENAI_AUDIO -> settings.openAiAudioModel();
+            case STUB -> "stub";
+        };
     }
 
     private void writeProperties(Properties properties) throws IOException {

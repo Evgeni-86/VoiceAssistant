@@ -23,9 +23,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Chat Completions DeepSeek: поток SSE читается в вызывающем фоновом потоке. */
 public final class DeepSeekAiService implements AiService {
+    private static final Logger LOG = LoggerFactory.getLogger(DeepSeekAiService.class);
     private static final URI ENDPOINT = URI.create("https://api.deepseek.com/chat/completions");
     private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -46,6 +50,10 @@ public final class DeepSeekAiService implements AiService {
 
     @Override
     public void streamMessage(String message, Consumer<String> onChunk, BooleanSupplier cancelled) throws Exception {
+        long startedAt = System.nanoTime();
+        LOG.info("AI request started, mode=DEEPSEEK, model={}", settings.deepSeekModel());
+        LOG.debug("Context prepared, messages={}, depth={}, streaming=true",
+                context.textExchanges().size() * 2, settings.contextDepth());
         if (message == null || message.isBlank()) {
             throw new IllegalArgumentException("Введите текст сообщения для ИИ.");
         }
@@ -84,6 +92,7 @@ public final class DeepSeekAiService implements AiService {
 
         CompletableFuture<HttpResponse<InputStream>> responseFuture =
                 client.sendAsync(request, HttpResponse.BodyHandlers.ofInputStream());
+        LOG.debug("HTTP request sent");
         activeResponse.set(responseFuture);
         InputStream body = null;
         try {
@@ -92,10 +101,16 @@ public final class DeepSeekAiService implements AiService {
             body = response.body();
             activeBody.set(body);
             checkCancelled(cancelled);
+            LOG.info("HTTP response received, status={}, durationMs={}", response.statusCode(),
+                    TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt));
             if (response.statusCode() != 200) {
+                if (response.statusCode() >= 500) LOG.error("AI provider HTTP failure, status={}", response.statusCode());
+                else LOG.warn("AI provider HTTP rejection, status={}", response.statusCode());
                 throw new IOException(httpError(response.statusCode()));
             }
             readEvents(body, onChunk, cancelled);
+            LOG.info("AI request completed, durationMs={}",
+                    TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt));
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
             throw new CancellationException("Генерация ответа отменена.");
@@ -103,6 +118,8 @@ public final class DeepSeekAiService implements AiService {
             if (cancelled.getAsBoolean() || Thread.currentThread().isInterrupted()) {
                 throw new CancellationException("Генерация ответа отменена.");
             }
+            LOG.error("AI connection failed, causeType={}", error.getCause() == null
+                    ? "unknown" : error.getCause().getClass().getName());
             throw networkError(error.getCause());
         } catch (IOException error) {
             if (cancelled.getAsBoolean() || Thread.currentThread().isInterrupted()) {

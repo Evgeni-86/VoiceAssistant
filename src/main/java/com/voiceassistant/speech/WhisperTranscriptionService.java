@@ -10,9 +10,13 @@ import java.util.Comparator;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Запускает локальный whisper-cli для сохранённого WAV. */
 public class WhisperTranscriptionService implements AutoCloseable {
+    private static final Logger LOG = LoggerFactory.getLogger(WhisperTranscriptionService.class);
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final AudioMixer audioMixer = new AudioMixer();
@@ -22,16 +26,21 @@ public class WhisperTranscriptionService implements AutoCloseable {
     }
 
     private String transcribeNow(Path recording) {
+        long startedAt = System.nanoTime();
         Path cli = configuredPath("VOICEASSISTANT_WHISPER_CLI", "whisper-cli.exe");
         Path model = configuredPath("VOICEASSISTANT_WHISPER_MODEL", "ggml-base.bin");
+        LOG.info("Recognition started, model={}", model.getFileName());
 
         if (!Files.isRegularFile(cli)) {
+            LOG.error("Whisper executable missing");
             throw new IllegalStateException("Не найден whisper-cli: " + cli);
         }
         if (!Files.isRegularFile(model)) {
+            LOG.error("Whisper model missing, model={}", model.getFileName());
             throw new IllegalStateException("Не найдена модель Whisper: " + model);
         }
         if (!Files.isRegularFile(recording)) {
+            LOG.error("Recognition audio file missing");
             throw new IllegalStateException("Не найдена аудиозапись: " + recording);
         }
 
@@ -39,6 +48,7 @@ public class WhisperTranscriptionService implements AutoCloseable {
         try {
             workDir = Files.createTempDirectory("voiceassistant-whisper-");
         } catch (IOException e) {
+            LOG.error("Whisper temporary directory creation failed, errorType={}", e.getClass().getName());
             throw new IllegalStateException("Не удалось создать временный каталог", e);
         }
 
@@ -62,12 +72,15 @@ public class WhisperTranscriptionService implements AutoCloseable {
             try {
                 code = process.waitFor();
             } catch (InterruptedException e) {
+                LOG.warn("Whisper process interrupted");
                 process.destroyForcibly();
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("Распознавание прервано", e);
             }
 
             if (code != 0) {
+                LOG.error("Whisper process failed, exitCode={}, durationMs={}", code,
+                        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt));
                 String details = Files.readString(log, StandardCharsets.UTF_8);
                 throw new IllegalStateException("whisper-cli завершился с кодом " + code
                         + ": " + details.substring(0, Math.min(details.length(), 500)));
@@ -77,8 +90,12 @@ public class WhisperTranscriptionService implements AutoCloseable {
             if (!Files.isRegularFile(transcript)) {
                 throw new IllegalStateException("whisper-cli не создал файл с текстом");
             }
-            return Files.readString(transcript, StandardCharsets.UTF_8).trim();
+            String result = Files.readString(transcript, StandardCharsets.UTF_8).trim();
+            LOG.info("Recognition completed, exitCode={}, durationMs={}", code,
+                    TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt));
+            return result;
         } catch (IOException e) {
+            LOG.error("Whisper process or audio read failed, errorType={}", e.getClass().getName());
             throw new IllegalStateException("Ошибка при запуске whisper-cli", e);
         } finally {
             try (var paths = Files.walk(workDir)) {

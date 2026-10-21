@@ -3,9 +3,12 @@ package com.voiceassistant.ai;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Снимок завершённых обменов из существующей истории текущей сессии. */
 public final class ConversationContextService {
+    private static final Logger LOG = LoggerFactory.getLogger(ConversationContextService.class);
     public record Exchange(String request, String response) { }
 
     public record Snapshot(List<Exchange> textExchanges, List<String> audioResponses) {
@@ -20,12 +23,21 @@ public final class ConversationContextService {
 
     /** Вызывать на потоке JavaFX, которому принадлежит список истории. */
     public Snapshot snapshot(AiSettings settings) {
-        if (!settings.useConversationContext()) return Snapshot.EMPTY;
+        if (!settings.useConversationContext()) {
+            LOG.debug("Context disabled, requestedDepth={}", settings.contextDepth());
+            return Snapshot.EMPTY;
+        }
         List<Exchange> exchanges = new ArrayList<>();
         List<String> responses = new ArrayList<>();
         for (AiHistoryEntry entry : history) { // история хранится от новых записей к старым
+            if (entry.getStatus() == AiHistoryEntry.Status.COMPLETED && entry.getResponse().isBlank()) {
+                LOG.warn("Completed history entry has no response; skipped for context");
+            }
             if (entry.getStatus() != AiHistoryEntry.Status.COMPLETED
                     || entry.getResponse().isBlank()) continue;
+            if (entry.isTextRequest() && (entry.getRequest() == null || entry.getRequest().isBlank())) {
+                LOG.warn("Text history entry has no request; text context cannot include it");
+            }
             if (responses.size() < settings.contextDepth()) {
                 responses.add(entry.getResponse());
             }
@@ -38,6 +50,8 @@ public final class ConversationContextService {
         }
         Collections.reverse(exchanges);
         Collections.reverse(responses);
+        LOG.debug("Context prepared, enabled=true, requestedDepth={}, textPairs={}, audioResponses={}",
+                settings.contextDepth(), exchanges.size(), responses.size());
         return new Snapshot(List.copyOf(exchanges), List.copyOf(responses));
     }
 

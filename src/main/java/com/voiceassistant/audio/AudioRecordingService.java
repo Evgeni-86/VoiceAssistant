@@ -10,8 +10,11 @@ import java.nio.file.Path;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.concurrent.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class AudioRecordingService implements AutoCloseable {
+    private static final Logger LOG = LoggerFactory.getLogger(AudioRecordingService.class);
 
     private final Map<AudioSourceType, AudioSource> sources =
             new EnumMap<>(AudioSourceType.class);
@@ -25,6 +28,7 @@ public class AudioRecordingService implements AutoCloseable {
     private Path recordingPath;
     private boolean recording;
     private boolean closed;
+    private long startedAtNanos;
 
     public AudioRecordingService() {
 
@@ -80,10 +84,13 @@ public class AudioRecordingService implements AutoCloseable {
                 activeSource = source;
                 recordingPath = path;
                 recording = true;
+                startedAtNanos = System.nanoTime();
+                LOG.info("Recording started, source={}", type);
 
                 return recordingPath;
 
             } catch (Exception e) {
+                LOG.error("Recording start failed, source={}, errorType={}", type, e.getClass().getName());
 
                 // Если запуск не удался, удаляем пустой файл.
                 if (path != null) {
@@ -129,7 +136,14 @@ public class AudioRecordingService implements AutoCloseable {
                     );
                 }
 
+                LOG.info("Recording finished, durationMs={}, sizeBytes={}",
+                        java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos),
+                        recordingPath.toFile().length());
                 return recordingPath;
+
+            } catch (Exception error) {
+                LOG.error("Recording stop failed, errorType={}", error.getClass().getName());
+                throw error;
 
             } finally {
                 recording = false;
