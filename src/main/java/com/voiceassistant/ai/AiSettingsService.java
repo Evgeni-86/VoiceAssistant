@@ -40,7 +40,7 @@ public final class AiSettingsService {
         try (InputStream input = Files.newInputStream(settingsFile)) {
             properties.load(input);
             String openRouterModel = properties.getProperty("openRouterModel", AiSettings.OPENROUTER_MODELS.getFirst());
-            if (AiSettings.OPENROUTER_AUDIO_MODELS.contains(openRouterModel)) {
+            if (OpenRouterModel.fromModelId(openRouterModel) == null) {
                 openRouterModel = AiSettings.OPENROUTER_MODELS.getFirst();
             }
             AiSettings loaded = new AiSettings(

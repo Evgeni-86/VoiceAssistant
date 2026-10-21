@@ -7,8 +7,7 @@ public record AiSettings(AiMode mode, String openRouterModel,
                          String openRouterAudioModel, String systemPrompt,
                          boolean useConversationContext, int contextDepth,
                          TranscriptionMode transcriptionMode, String transcriptionModel) {
-    public static final List<String> OPENROUTER_MODELS = List.of("openrouter/free", "qwen/qwen3-235b-a22b-2507",
-            "openai/gpt-4.1-mini", "openai/gpt-5-mini");
+    public static final List<String> OPENROUTER_MODELS = OpenRouterModel.modelIds();
     public static final List<String> OPENROUTER_AUDIO_MODELS = List.of("openai/gpt-audio-mini", "openai/gpt-audio");
     public static final List<String> TRANSCRIPTION_MODELS = List.of(
             "openai/whisper-large-v3-turbo", "openai/whisper-large-v3", "openai/whisper-1");
