@@ -34,6 +34,19 @@ public final class OpenRouterAudioAiService implements AiService {
     private static final Logger LOG = LoggerFactory.getLogger(OpenRouterAudioAiService.class);
     private static final URI ENDPOINT = URI.create("https://openrouter.ai/api/v1/chat/completions");
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final String AUDIO_REQUEST_INSTRUCTION = """
+            Распознай речь пользователя из аудиозаписи максимально близко к исходной формулировке.
+            Ответь на запрос пользователя согласно системной инструкции.
+            Верни результат в двух блоках:
+            <QUESTION>распознанная речь пользователя</QUESTION>
+            <ANSWER>
+            ответ на запрос пользователя
+            </ANSWER>
+            Не добавляй текст вне блоков. Метки блоков только разделяют вопрос и ответ.
+            Внутри ANSWER сохраняй читаемую структуру: разделяй абзацы пустой строкой,
+            каждый пункт списка и каждый пример кода начинай с новой строки.
+            Не сжимай весь ответ в одну строку.
+            """;
 
     private final AiSettings settings;
     private final AiSettingsService settingsService;
@@ -58,6 +71,12 @@ public final class OpenRouterAudioAiService implements AiService {
     @Override
     public void streamAudio(Path wav, AiSettings ignoredSettings, AiSettingsService ignoredSettingsService,
                             Consumer<String> onChunk, BooleanSupplier cancelled) throws Exception {
+        streamAudio(wav, ignoredSettings, ignoredSettingsService, question -> { }, onChunk, cancelled);
+    }
+
+    public void streamAudio(Path wav, AiSettings ignoredSettings, AiSettingsService ignoredSettingsService,
+                            Consumer<String> onQuestion, Consumer<String> onChunk,
+                            BooleanSupplier cancelled) throws Exception {
         long startedAt = System.nanoTime();
         LOG.info("AI request started, mode=OPENROUTER_AUDIO, model={}", settings.openRouterAudioModel());
         LOG.debug("Context prepared, audioResponses={}, depth={}, streaming=true",
@@ -86,7 +105,7 @@ public final class OpenRouterAudioAiService implements AiService {
                     ConversationContextService.audioContextBlock(context.audioResponses()));
         }
         var content = messages.addObject().put("role", "user").putArray("content");
-        content.addObject().put("type", "text").put("text", "Ответь на голосовой запрос пользователя.");
+        content.addObject().put("type", "text").put("text", AUDIO_REQUEST_INSTRUCTION);
         content.addObject().put("type", "input_audio").putObject("input_audio")
                 .put("data", Base64.getEncoder().encodeToString(audio)).put("format", "wav");
         payload.putArray("modalities").add("text");
@@ -118,7 +137,7 @@ public final class OpenRouterAudioAiService implements AiService {
                 else LOG.warn("AI provider HTTP rejection, status={}", response.statusCode());
                 throw new IOException(httpError(response.statusCode(), body));
             }
-            readEvents(body, onChunk, cancelled);
+            readEvents(body, onQuestion, onChunk, cancelled);
             LOG.info("AI request completed, durationMs={}",
                     TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt));
         } catch (InterruptedException error) {
@@ -169,11 +188,13 @@ public final class OpenRouterAudioAiService implements AiService {
         }
     }
 
-    private static void readEvents(InputStream body, Consumer<String> onChunk,
+    private static void readEvents(InputStream body, Consumer<String> onQuestion, Consumer<String> onChunk,
                                    BooleanSupplier cancelled) throws IOException {
         boolean done = false;
         boolean receivedText = false;
         boolean receivedAudio = false;
+        StructuredResponse structured = new StructuredResponse(onQuestion, onChunk);
+        LOG.debug("Structured audio response processing started");
         StringBuilder data = new StringBuilder();
         boolean hasData = false;
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(body, StandardCharsets.UTF_8))) {
@@ -182,7 +203,7 @@ public final class OpenRouterAudioAiService implements AiService {
                 checkCancelled(cancelled);
                 if (line.isEmpty()) {
                     if (hasData) {
-                        EventResult result = dispatch(data.toString(), onChunk, cancelled);
+                        EventResult result = dispatch(data.toString(), structured, cancelled);
                         done = result.done();
                         receivedText |= result.text();
                         receivedAudio |= result.audio();
@@ -198,6 +219,7 @@ public final class OpenRouterAudioAiService implements AiService {
             }
             checkCancelled(cancelled);
             if (!done) {
+                LOG.warn("Structured audio response ended before SSE completion");
                 throw new IOException("Соединение с OpenRouter завершилось до конца ответа.");
             }
             if (!receivedText) {
@@ -205,12 +227,156 @@ public final class OpenRouterAudioAiService implements AiService {
                         ? "OpenRouter вернул только аудио без текстового ответа."
                         : "OpenRouter вернул пустой ответ.");
             }
+            structured.finish();
+        }
+    }
+
+    private static final class StructuredResponse {
+        private static final String QUESTION_OPEN = "<QUESTION>";
+        private static final String QUESTION_CLOSE = "</QUESTION>";
+        private static final String ANSWER_OPEN = "<ANSWER>";
+        private static final String ANSWER_CLOSE = "</ANSWER>";
+
+        private enum Part { QUESTION_OPEN, QUESTION, ANSWER_OPEN, ANSWER, COMPLETE }
+
+        private final Consumer<String> onQuestion;
+        private final Consumer<String> onAnswer;
+        private final StringBuilder pending = new StringBuilder();
+        private final StringBuilder question = new StringBuilder();
+        private Part part = Part.QUESTION_OPEN;
+        private boolean answerHasText;
+
+        private StructuredResponse(Consumer<String> onQuestion, Consumer<String> onAnswer) {
+            this.onQuestion = onQuestion;
+            this.onAnswer = onAnswer;
+        }
+
+        private void accept(String chunk) throws IOException {
+            pending.append(chunk);
+            while (true) {
+                switch (part) {
+                    case QUESTION_OPEN -> {
+                        if (!opening(QUESTION_OPEN)) return;
+                        part = Part.QUESTION;
+                    }
+                    case QUESTION -> {
+                        int end = pending.indexOf(QUESTION_CLOSE);
+                        if (end >= 0) {
+                            question.append(pending, 0, end);
+                            pending.delete(0, end + QUESTION_CLOSE.length());
+                            String recognized = question.toString().trim();
+                            if (recognized.isEmpty()) throw malformed("пустой блок QUESTION");
+                            if (recognized.contains(QUESTION_OPEN) || recognized.contains(ANSWER_OPEN)
+                                    || recognized.contains(ANSWER_CLOSE)) {
+                                throw malformed("маркер в блоке QUESTION нарушает последовательность");
+                            }
+                            onQuestion.accept(recognized);
+                            LOG.debug("Structured audio QUESTION received");
+                            part = Part.ANSWER_OPEN;
+                        } else {
+                            holdMarkerTail(QUESTION_CLOSE, question::append);
+                            return;
+                        }
+                    }
+                    case ANSWER_OPEN -> {
+                        if (!opening(ANSWER_OPEN)) return;
+                        LOG.debug("Structured audio ANSWER streaming started");
+                        part = Part.ANSWER;
+                    }
+                    case ANSWER -> {
+                        int end = pending.indexOf(ANSWER_CLOSE);
+                        int wrong = firstMarker(QUESTION_OPEN, QUESTION_CLOSE, ANSWER_OPEN);
+                        if (wrong >= 0 && (end < 0 || wrong < end)) {
+                            throw malformed("маркер в блоке ANSWER нарушает последовательность");
+                        }
+                        int possibleClose = pending.indexOf("</AN");
+                        if (possibleClose >= 0) {
+                            int length = Math.min(pending.length() - possibleClose, ANSWER_CLOSE.length());
+                            if (!ANSWER_CLOSE.startsWith(pending.substring(possibleClose, possibleClose + length))) {
+                                throw malformed("некорректный закрывающий маркер ANSWER");
+                            }
+                        }
+                        if (end >= 0) {
+                            emit(pending.substring(0, end));
+                            pending.delete(0, end + ANSWER_CLOSE.length());
+                            part = Part.COMPLETE;
+                        } else {
+                            holdMarkerTail(this::emit, ANSWER_CLOSE, QUESTION_OPEN, QUESTION_CLOSE, ANSWER_OPEN);
+                            return;
+                        }
+                    }
+                    case COMPLETE -> {
+                        if (!pending.toString().isBlank()) throw malformed("текст после блока ANSWER");
+                        pending.setLength(0);
+                        return;
+                    }
+                }
+            }
+        }
+
+        private boolean opening(String marker) throws IOException {
+            while (!pending.isEmpty() && Character.isWhitespace(pending.charAt(0))) pending.deleteCharAt(0);
+            int length = Math.min(pending.length(), marker.length());
+            if (!marker.startsWith(pending.substring(0, length))) throw malformed("нарушен порядок блоков");
+            if (pending.length() < marker.length()) return false;
+            pending.delete(0, marker.length());
+            return true;
+        }
+
+        private void holdMarkerTail(String marker, Consumer<String> output) {
+            holdMarkerTail(output, marker);
+        }
+
+        private int firstMarker(String... markers) {
+            int first = -1;
+            for (String marker : markers) {
+                int index = pending.indexOf(marker);
+                if (index >= 0 && (first < 0 || index < first)) first = index;
+            }
+            return first;
+        }
+
+        private void holdMarkerTail(Consumer<String> output, String... markers) {
+            int held = 0;
+            for (String marker : markers) {
+                int max = Math.min(pending.length(), marker.length() - 1);
+                for (int size = max; size > held; size--) {
+                    if (marker.startsWith(pending.substring(pending.length() - size))) {
+                        held = size;
+                        break;
+                    }
+                }
+            }
+            int ready = pending.length() - held;
+            if (ready > 0) {
+                output.accept(pending.substring(0, ready));
+                pending.delete(0, ready);
+            }
+        }
+
+        private void emit(String text) {
+            if (!text.isEmpty()) {
+                if (!text.isBlank()) answerHasText = true;
+                onAnswer.accept(text);
+            }
+        }
+
+        private void finish() throws IOException {
+            if (part != Part.COMPLETE || !answerHasText) {
+                LOG.warn("Structured audio response incomplete, part={}", part);
+                throw malformed("отсутствует или не завершён блок QUESTION или ANSWER");
+            }
+        }
+
+        private static IOException malformed(String reason) {
+            LOG.warn("Structured audio marker parsing failed, reason={}", reason);
+            return new IOException("OpenRouter вернул ответ в неожиданном формате: " + reason + ".");
         }
     }
 
     private record EventResult(boolean done, boolean text, boolean audio) { }
 
-    private static EventResult dispatch(String data, Consumer<String> onChunk,
+    private static EventResult dispatch(String data, StructuredResponse structured,
                                         BooleanSupplier cancelled) throws IOException {
         if (data.isBlank()) return new EventResult(false, false, false);
         if (data.trim().equals("[DONE]")) return new EventResult(true, false, false);
@@ -227,12 +393,25 @@ public final class OpenRouterAudioAiService implements AiService {
             throw new IOException("Ошибка генерации OpenRouter. Проверьте модель, лимиты и состояние сервиса.");
         }
         JsonNode choices = event.path("choices");
-        JsonNode delta = choices.isArray() && !choices.isEmpty()
-                ? choices.get(0).path("delta") : null;
+        JsonNode choice = choices.isArray() && !choices.isEmpty() ? choices.get(0) : null;
+        JsonNode finishReason = choice == null ? null : choice.path("finish_reason");
+        if (finishReason != null && !finishReason.isMissingNode() && !finishReason.isNull()) {
+            String reason = finishReason.asText();
+            if (!"stop".equals(reason)) {
+                LOG.warn("Audio generation stopped before normal completion, reason={}", reason);
+                throw new IOException(switch (reason) {
+                    case "length" -> "OpenRouter прервал генерацию: достигнут лимит токенов.";
+                    case "content_filter" -> "OpenRouter прервал генерацию из-за фильтра содержимого.";
+                    default -> "OpenRouter прервал генерацию до нормального завершения.";
+                });
+            }
+            LOG.debug("Audio generation finished normally");
+        }
+        JsonNode delta = choice == null ? null : choice.path("delta");
         JsonNode content = delta == null ? null : delta.path("content");
         if (content != null && content.isTextual() && !content.textValue().isEmpty()) {
             checkCancelled(cancelled);
-            onChunk.accept(content.textValue());
+            structured.accept(content.textValue());
             return new EventResult(false, true, false);
         }
         return new EventResult(false, false, delta != null && delta.hasNonNull("audio"));

@@ -8,6 +8,7 @@ import com.voiceassistant.ai.AiSettings;
 import com.voiceassistant.ai.AiSettingsService;
 import com.voiceassistant.ai.ConversationContextService;
 import com.voiceassistant.ai.TranscriptionMode;
+import com.voiceassistant.ai.OpenRouterAudioAiService;
 import com.voiceassistant.audio.AudioRecordingService;
 import com.voiceassistant.speech.TranscriptionService;
 import com.voiceassistant.speech.OpenRouterTranscriptionService;
@@ -414,6 +415,9 @@ final class VoiceAssistantController {
         }
 
         state = automatic ? State.AUTO_SENDING_AI : State.SENDING_AI;
+        if (audio != null && aiService instanceof OpenRouterAudioAiService) {
+            view.transcriptArea.clear();
+        }
         view.aiResponseArea.clear();
         view.aiStatusLabel.setText("Генерация ответа ИИ...");
         if (automatic) {
@@ -431,6 +435,14 @@ final class VoiceAssistantController {
                 try {
                     if (audio == null) {
                         aiService.streamMessage(message, request::accept, request.cancelled::get);
+                    } else if (aiService instanceof OpenRouterAudioAiService audioService) {
+                        audioService.streamAudio(audio, requestSettings, settingsService,
+                                question -> Platform.runLater(() -> {
+                                    if (activeAiRequest == request && !request.cancelled.get()
+                                            && state != State.CLOSING) {
+                                        view.transcriptArea.setText(question);
+                                    }
+                                }), request::accept, request.cancelled::get);
                     } else {
                         aiService.streamAudio(audio, requestSettings, settingsService,
                                 request::accept, request.cancelled::get);
