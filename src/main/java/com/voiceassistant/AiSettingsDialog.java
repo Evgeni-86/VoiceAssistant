@@ -56,16 +56,12 @@ final class AiSettingsDialog {
 
         ComboBox<String> model = new ComboBox<>();
         model.setMaxWidth(Double.MAX_VALUE);
-        final String[] deepSeekModel = {current.deepSeekModel()};
         final String[] openRouterModel = {current.openRouterModel()};
-        final String[] openAiAudioModel = {current.openAiAudioModel()};
         final String[] openRouterAudioModel = {current.openRouterAudioModel()};
         model.valueProperty().addListener((obs, oldValue, value) -> {
             if (value == null) return;
             if (mode.getValue() == AiMode.OPENROUTER) openRouterModel[0] = value;
-            else if (mode.getValue() == AiMode.OPENAI_AUDIO) openAiAudioModel[0] = value;
             else if (mode.getValue() == AiMode.OPENROUTER_AUDIO) openRouterAudioModel[0] = value;
-            else deepSeekModel[0] = value;
         });
 
         PasswordField keyField = new PasswordField();
@@ -79,15 +75,13 @@ final class AiSettingsDialog {
             AiMode selected = mode.getValue();
             model.getItems().setAll(switch (selected) {
                 case OPENROUTER -> AiSettings.OPENROUTER_MODELS;
-                case OPENAI_AUDIO -> AiSettings.OPENAI_AUDIO_MODELS;
                 case OPENROUTER_AUDIO -> AiSettings.OPENROUTER_AUDIO_MODELS;
-                case STUB, DEEPSEEK -> AiSettings.DEEPSEEK_MODELS;
+                case STUB -> AiSettings.OPENROUTER_MODELS;
             });
             model.setValue(switch (selected) {
                 case OPENROUTER -> openRouterModel[0];
-                case OPENAI_AUDIO -> openAiAudioModel[0];
                 case OPENROUTER_AUDIO -> openRouterAudioModel[0];
-                case STUB, DEEPSEEK -> deepSeekModel[0];
+                case STUB -> openRouterModel[0];
             });
             model.setDisable(selected == AiMode.STUB);
             boolean usesKey = selected != AiMode.STUB;
@@ -101,12 +95,7 @@ final class AiSettingsDialog {
             removeKey.setManaged(usesKey);
             if (usesKey) {
                 AiMode keyMode = selected == AiMode.OPENROUTER_AUDIO ? AiMode.OPENROUTER : selected;
-                String provider = switch (selected) {
-                    case OPENROUTER, OPENROUTER_AUDIO -> "OpenRouter";
-                    case DEEPSEEK -> "DeepSeek";
-                    case OPENAI_AUDIO -> "OpenAI Audio";
-                    case STUB -> throw new IllegalStateException();
-                };
+                String provider = "OpenRouter";
                 keyTitle.setText("API-ключ " + provider);
                 keyField.setPromptText("Новый API-ключ " + provider);
                 keyField.setText(newKeys.getOrDefault(keyMode, ""));
@@ -169,8 +158,8 @@ final class AiSettingsDialog {
         save.setOnAction(event -> {
             AiSettings settings;
             try {
-                settings = new AiSettings(mode.getValue(), deepSeekModel[0], openRouterModel[0],
-                        openAiAudioModel[0], openRouterAudioModel[0], prompt.getText(),
+                settings = new AiSettings(mode.getValue(), openRouterModel[0],
+                        openRouterAudioModel[0], prompt.getText(),
                         useContext.isSelected(), contextDepth.getValue(), transcriptionMode.getValue(),
                         transcriptionModel.getValue());
             } catch (IllegalArgumentException | NullPointerException validationError) {

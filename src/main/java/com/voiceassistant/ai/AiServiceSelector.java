@@ -6,7 +6,6 @@ import java.time.Duration;
 /** Единственная точка выбора реализации ИИ. */
 public final class AiServiceSelector {
     private final AiService stubService = new StubAiService();
-    private final AiService openAiAudioStub = new OpenAiAudioStubService();
     private final HttpClient httpClient = HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_2)
             .connectTimeout(Duration.ofSeconds(20))
@@ -22,8 +21,6 @@ public final class AiServiceSelector {
         return switch (settings.mode()) {
             case STUB -> stubService;
             case OPENROUTER -> new OpenRouterAiService(settings, settingsService, httpClient, context);
-            case DEEPSEEK -> new DeepSeekAiService(settings, settingsService, httpClient, context);
-            case OPENAI_AUDIO -> openAiAudioStub;
             case OPENROUTER_AUDIO -> new OpenRouterAudioAiService(settings, settingsService, httpClient, context);
         };
     }

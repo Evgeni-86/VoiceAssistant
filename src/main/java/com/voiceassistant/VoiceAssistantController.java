@@ -543,27 +543,23 @@ final class VoiceAssistantController {
 
     private boolean aiAvailable() {
         if (settings == null) return false;
-        if (settings.mode() == AiMode.STUB || settings.mode() == AiMode.OPENAI_AUDIO) return true;
+        if (settings.mode() == AiMode.STUB) return true;
         AiMode mode = settings.mode();
         if (!settingsService.hasApiKey(mode)) {
-            String provider = mode == AiMode.DEEPSEEK ? "DeepSeek" : "OpenRouter";
-            view.aiStatusLabel.setText("Не настроен API-ключ " + provider + ". Откройте настройки ИИ.");
+            view.aiStatusLabel.setText("Не настроен API-ключ OpenRouter. Откройте настройки ИИ.");
             return false;
         }
         return true;
     }
 
     private boolean directAudioMode() {
-        return settings != null && (settings.mode() == AiMode.OPENAI_AUDIO
-                || settings.mode() == AiMode.OPENROUTER_AUDIO);
+        return settings != null && settings.mode() == AiMode.OPENROUTER_AUDIO;
     }
 
     private static String modeName(AiMode mode) {
         return switch (mode) {
             case STUB -> "Stub";
             case OPENROUTER -> "OpenRouter";
-            case DEEPSEEK -> "DeepSeek";
-            case OPENAI_AUDIO -> "OpenAI Audio";
             case OPENROUTER_AUDIO -> "OpenRouter Audio";
         };
     }
