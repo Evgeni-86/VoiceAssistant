@@ -88,6 +88,7 @@ final class MainView {
                 updateTextAreaRows(transcriptArea, 6));
 
         aiResponseArea = new TextArea();
+        aiResponseArea.getStyleClass().add("ai-response-area");
         aiResponseArea.setEditable(false);
         aiResponseArea.setWrapText(true);
         aiResponseArea.setPromptText("Здесь появится тестовый ответ ИИ");
@@ -127,6 +128,7 @@ final class MainView {
         historyRequestArea.widthProperty().addListener((observable, oldWidth, newWidth) ->
                 updateTextAreaRows(historyRequestArea, 5));
         historyResponseArea = new TextArea();
+        historyResponseArea.getStyleClass().add("ai-response-area");
         historyResponseArea.setEditable(false);
         historyResponseArea.setWrapText(true);
         historyResponseArea.setPrefRowCount(3);
@@ -222,6 +224,7 @@ final class MainView {
         root.setPadding(new Insets(15, 15, 15, 15));
 
         Scene scene = new Scene(root, 700, 858);
+        scene.getStylesheets().add(MainView.class.getResource("/response.css").toExternalForm());
         stage.setTitle("Voice Assistant");
         stage.setScene(scene);
         stage.setMinWidth(620);
