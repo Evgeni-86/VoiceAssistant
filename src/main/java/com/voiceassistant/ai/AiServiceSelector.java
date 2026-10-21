@@ -24,6 +24,7 @@ public final class AiServiceSelector {
             case OPENROUTER -> new OpenRouterAiService(settings, settingsService, httpClient);
             case DEEPSEEK -> new DeepSeekAiService(settings, settingsService, httpClient);
             case OPENAI_AUDIO -> openAiAudioStub;
+            case OPENROUTER_AUDIO -> new OpenRouterAudioAiService(settings, settingsService, httpClient);
         };
     }
 

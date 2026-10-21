@@ -114,12 +114,12 @@ final class VoiceAssistantController {
         view.finishAndSendButton.setOnAction(event -> stopRecording(true));
         view.transcribeButton.setOnAction(event -> {
             if (state == State.IDLE && lastRecording != null && settings != null
-                    && settings.mode() != AiMode.OPENAI_AUDIO) {
+                    && !directAudioMode()) {
                 transcribe(lastRecording, false);
             }
         });
         view.sendToAiButton.setOnAction(event -> {
-            if (state == State.IDLE && settings != null && settings.mode() != AiMode.OPENAI_AUDIO
+            if (state == State.IDLE && settings != null && !directAudioMode()
                     && !view.transcriptArea.getText().isBlank()) {
                 sendToAi(view.transcriptArea.getText().trim(), false);
             }
@@ -203,7 +203,7 @@ final class VoiceAssistantController {
         view.sourceComboBox.setDisable(!idle);
         view.stopButton.setDisable(!recording);
         view.finishAndSendButton.setDisable(!recording || settings == null);
-        boolean audioMode = settings != null && settings.mode() == AiMode.OPENAI_AUDIO;
+        boolean audioMode = directAudioMode();
         view.transcribeButton.setDisable(!idle || lastRecording == null || audioMode);
         view.sendToAiButton.setDisable(!idle || settings == null || audioMode
                 || view.transcriptArea.getText().isBlank());
@@ -262,7 +262,7 @@ final class VoiceAssistantController {
         if (automatic) {
             view.transcriptArea.clear();
             view.aiResponseArea.clear();
-            view.aiStatusLabel.setText(settings.mode() == AiMode.OPENAI_AUDIO
+            view.aiStatusLabel.setText(directAudioMode()
                     ? "ИИ: ожидает обработку аудио" : "ИИ: ожидает распознавания речи");
         }
         updateControls();
@@ -283,7 +283,7 @@ final class VoiceAssistantController {
 
             lastRecording = path;
             if (automatic) {
-                if (settings.mode() == AiMode.OPENAI_AUDIO) {
+                if (directAudioMode()) {
                     sendAiRequest("Аудиозапись: " + path.getFileName(), true, path);
                 } else {
                     transcribe(path, true);
@@ -472,12 +472,18 @@ final class VoiceAssistantController {
         return true;
     }
 
+    private boolean directAudioMode() {
+        return settings != null && (settings.mode() == AiMode.OPENAI_AUDIO
+                || settings.mode() == AiMode.OPENROUTER_AUDIO);
+    }
+
     private static String modeName(AiMode mode) {
         return switch (mode) {
             case STUB -> "Stub";
             case OPENROUTER -> "OpenRouter";
             case DEEPSEEK -> "DeepSeek";
             case OPENAI_AUDIO -> "OpenAI Audio";
+            case OPENROUTER_AUDIO -> "OpenRouter Audio";
         };
     }
 

@@ -42,6 +42,7 @@ public final class AiSettingsService {
                     properties.getProperty("deepSeekModel", properties.getProperty("model", AiSettings.DEEPSEEK_MODELS.getFirst())),
                     properties.getProperty("openRouterModel", AiSettings.OPENROUTER_MODELS.getFirst()),
                     properties.getProperty("openAiAudioModel", AiSettings.OPENAI_AUDIO_MODELS.getFirst()),
+                    properties.getProperty("openRouterAudioModel", AiSettings.OPENROUTER_AUDIO_MODELS.getFirst()),
                     properties.getProperty("systemPrompt"));
         } catch (RuntimeException exception) {
             throw new IOException("Файл настроек ИИ повреждён или содержит неподдерживаемое значение.", exception);
@@ -73,6 +74,7 @@ public final class AiSettingsService {
             properties.setProperty("deepSeekModel", defaults.deepSeekModel());
             properties.setProperty("openRouterModel", defaults.openRouterModel());
             properties.setProperty("openAiAudioModel", defaults.openAiAudioModel());
+            properties.setProperty("openRouterAudioModel", defaults.openRouterAudioModel());
             properties.setProperty("systemPrompt", defaults.systemPrompt());
         }
         properties.setProperty(RESPONSE_FONT_SIZE, Integer.toString(Math.clamp(size, 10, 30)));
@@ -115,6 +117,7 @@ public final class AiSettingsService {
             properties.setProperty("deepSeekModel", settings.deepSeekModel());
             properties.setProperty("openRouterModel", settings.openRouterModel());
             properties.setProperty("openAiAudioModel", settings.openAiAudioModel());
+            properties.setProperty("openRouterAudioModel", settings.openRouterAudioModel());
             properties.setProperty("systemPrompt", settings.systemPrompt());
             writeProperties(properties);
         } catch (IOException | RuntimeException exception) {
@@ -140,6 +143,7 @@ public final class AiSettingsService {
     }
 
     private WindowsDpapiSecretStore store(AiMode mode) {
+        if (mode == AiMode.OPENROUTER_AUDIO) mode = AiMode.OPENROUTER;
         WindowsDpapiSecretStore store = secretStores.get(mode);
         if (store == null) throw new IllegalArgumentException("Для Stub API-ключ не используется.");
         return store;

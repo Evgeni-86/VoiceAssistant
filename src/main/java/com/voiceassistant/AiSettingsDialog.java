@@ -43,10 +43,12 @@ final class AiSettingsDialog {
         final String[] deepSeekModel = {current.deepSeekModel()};
         final String[] openRouterModel = {current.openRouterModel()};
         final String[] openAiAudioModel = {current.openAiAudioModel()};
+        final String[] openRouterAudioModel = {current.openRouterAudioModel()};
         model.valueProperty().addListener((obs, oldValue, value) -> {
             if (value == null) return;
             if (mode.getValue() == AiMode.OPENROUTER) openRouterModel[0] = value;
             else if (mode.getValue() == AiMode.OPENAI_AUDIO) openAiAudioModel[0] = value;
+            else if (mode.getValue() == AiMode.OPENROUTER_AUDIO) openRouterAudioModel[0] = value;
             else deepSeekModel[0] = value;
         });
 
@@ -62,11 +64,13 @@ final class AiSettingsDialog {
             model.getItems().setAll(switch (selected) {
                 case OPENROUTER -> AiSettings.OPENROUTER_MODELS;
                 case OPENAI_AUDIO -> AiSettings.OPENAI_AUDIO_MODELS;
+                case OPENROUTER_AUDIO -> AiSettings.OPENROUTER_AUDIO_MODELS;
                 case STUB, DEEPSEEK -> AiSettings.DEEPSEEK_MODELS;
             });
             model.setValue(switch (selected) {
                 case OPENROUTER -> openRouterModel[0];
                 case OPENAI_AUDIO -> openAiAudioModel[0];
+                case OPENROUTER_AUDIO -> openRouterAudioModel[0];
                 case STUB, DEEPSEEK -> deepSeekModel[0];
             });
             model.setDisable(selected == AiMode.STUB);
@@ -80,27 +84,29 @@ final class AiSettingsDialog {
             keyState.setManaged(usesKey);
             removeKey.setManaged(usesKey);
             if (usesKey) {
+                AiMode keyMode = selected == AiMode.OPENROUTER_AUDIO ? AiMode.OPENROUTER : selected;
                 String provider = switch (selected) {
-                    case OPENROUTER -> "OpenRouter";
+                    case OPENROUTER, OPENROUTER_AUDIO -> "OpenRouter";
                     case DEEPSEEK -> "DeepSeek";
                     case OPENAI_AUDIO -> "OpenAI Audio";
                     case STUB -> throw new IllegalStateException();
                 };
                 keyTitle.setText("API-ключ " + provider);
                 keyField.setPromptText("Новый API-ключ " + provider);
-                keyField.setText(newKeys.getOrDefault(selected, ""));
-                boolean exists = service.hasApiKey(selected);
-                keyState.setText(deletedKeys.contains(selected) ? "API-ключ будет удалён после сохранения настроек"
+                keyField.setText(newKeys.getOrDefault(keyMode, ""));
+                boolean exists = service.hasApiKey(keyMode);
+                keyState.setText(deletedKeys.contains(keyMode) ? "API-ключ будет удалён после сохранения настроек"
                         : !keyField.getText().isEmpty() ? "Новый API-ключ будет сохранён после нажатия «Сохранить»"
                         : exists ? "API-ключ сохранён" : "API-ключ не сохранён");
-                removeKey.setDisable(!exists || deletedKeys.contains(selected));
+                removeKey.setDisable(!exists || deletedKeys.contains(keyMode));
             }
         };
         mode.valueProperty().addListener((obs, oldValue, value) -> updateProvider.run());
         updateProvider.run();
         removeKey.setOnAction(event -> {
-            deletedKeys.add(mode.getValue());
-            newKeys.remove(mode.getValue());
+            AiMode keyMode = mode.getValue() == AiMode.OPENROUTER_AUDIO ? AiMode.OPENROUTER : mode.getValue();
+            deletedKeys.add(keyMode);
+            newKeys.remove(keyMode);
             keyField.clear();
             keyState.setText("API-ключ будет удалён после сохранения настроек");
             removeKey.setDisable(true);
@@ -108,15 +114,16 @@ final class AiSettingsDialog {
         keyField.textProperty().addListener((observable, oldValue, newValue) -> {
             AiMode selected = mode.getValue();
             if (selected == AiMode.STUB) return;
+            AiMode keyMode = selected == AiMode.OPENROUTER_AUDIO ? AiMode.OPENROUTER : selected;
             if (!newValue.isEmpty()) {
-                newKeys.put(selected, newValue);
-                deletedKeys.remove(selected);
+                newKeys.put(keyMode, newValue);
+                deletedKeys.remove(keyMode);
                 keyState.setText("Новый API-ключ будет сохранён после нажатия «Сохранить»");
-                removeKey.setDisable(!service.hasApiKey(selected));
-            } else if (!deletedKeys.contains(selected)) {
-                newKeys.remove(selected);
-                keyState.setText(service.hasApiKey(selected) ? "API-ключ сохранён" : "API-ключ не сохранён");
-                removeKey.setDisable(!service.hasApiKey(selected));
+                removeKey.setDisable(!service.hasApiKey(keyMode));
+            } else if (!deletedKeys.contains(keyMode)) {
+                newKeys.remove(keyMode);
+                keyState.setText(service.hasApiKey(keyMode) ? "API-ключ сохранён" : "API-ключ не сохранён");
+                removeKey.setDisable(!service.hasApiKey(keyMode));
             }
         });
 
@@ -140,7 +147,7 @@ final class AiSettingsDialog {
             AiSettings settings;
             try {
                 settings = new AiSettings(mode.getValue(), deepSeekModel[0], openRouterModel[0],
-                        openAiAudioModel[0], prompt.getText());
+                        openAiAudioModel[0], openRouterAudioModel[0], prompt.getText());
             } catch (IllegalArgumentException | NullPointerException validationError) {
                 error.setText(validationError.getMessage() == null
                         ? "Заполните все настройки ИИ." : validationError.getMessage());
