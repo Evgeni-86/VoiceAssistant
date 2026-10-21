@@ -25,9 +25,13 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Отправляет сохранённый WAV в специализированный API транскрипции OpenRouter. */
 public final class OpenRouterTranscriptionService implements TranscriptionService {
+    private static final Logger LOG = LoggerFactory.getLogger(OpenRouterTranscriptionService.class);
     private static final URI ENDPOINT = URI.create("https://openrouter.ai/api/v1/audio/transcriptions");
     private static final long MAX_WAV_BYTES = 25L * 1024 * 1024;
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -51,12 +55,18 @@ public final class OpenRouterTranscriptionService implements TranscriptionServic
             try {
                 return transcribeNow(recording);
             } catch (IOException error) {
+                LOG.error("Recognition failed, provider=OPENROUTER, errorType={}", error.getClass().getName());
                 throw new CompletionException(error);
+            } catch (CancellationException error) {
+                LOG.warn("Recognition cancelled, provider=OPENROUTER");
+                throw error;
             }
         }, executor);
     }
 
     private String transcribeNow(Path recording) throws IOException {
+        long startedAt = System.nanoTime();
+        LOG.info("Recognition started, provider=OPENROUTER, model={}", model);
         if (recording == null || !Files.isRegularFile(recording) || !Files.isReadable(recording)) {
             throw new IOException("WAV-файл отсутствует или недоступен.");
         }
@@ -91,6 +101,7 @@ public final class OpenRouterTranscriptionService implements TranscriptionServic
 
         HttpResponse<String> response;
         try {
+            LOG.debug("Recognition HTTP request sent, provider=OPENROUTER, sizeBytes={}", size);
             response = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         } catch (HttpTimeoutException error) {
             throw new IOException("Превышено время ожидания транскрипции OpenRouter.", error);
@@ -105,10 +116,15 @@ public final class OpenRouterTranscriptionService implements TranscriptionServic
             throw new IOException("Ошибка соединения с OpenRouter при транскрипции.", error);
         }
 
+        LOG.info("Recognition HTTP response received, provider=OPENROUTER, status={}, durationMs={}",
+                response.statusCode(), TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt));
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             throw new IOException(httpError(response.statusCode()));
         }
-        return parseTranscript(response.body());
+        String transcript = parseTranscript(response.body());
+        LOG.info("Recognition completed, provider=OPENROUTER, durationMs={}",
+                TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt));
+        return transcript;
     }
 
     static String parseTranscript(String body) throws IOException {

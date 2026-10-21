@@ -70,6 +70,8 @@ public final class AiSettingsService {
                     Integer.toString(defaultSize)));
             return Math.clamp(size, 10, 30);
         } catch (IOException | IllegalArgumentException exception) {
+            LOG.warn("Response font size load failed; using default, errorType={}",
+                    exception.getClass().getName());
             return defaultSize;
         }
     }
@@ -141,7 +143,11 @@ public final class AiSettingsService {
             LOG.error("Settings save failed, errorType={}", exception.getClass().getName());
             for (var previous : previousKeys.entrySet()) {
                 try { store(previous.getKey()).restore(previous.getValue()); }
-                catch (IOException rollbackError) { exception.addSuppressed(rollbackError); }
+                catch (IOException rollbackError) {
+                    LOG.error("API key rollback failed, mode={}, errorType={}",
+                            previous.getKey(), rollbackError.getClass().getName());
+                    exception.addSuppressed(rollbackError);
+                }
             }
             throw new IOException("Не удалось сохранить настройки ИИ.", exception);
         }

@@ -324,6 +324,8 @@ final class VoiceAssistantController {
     }
 
     private void transcribe(Path recording, boolean automatic) {
+        TranscriptionMode mode = settings.transcriptionMode();
+        LOG.info("Recognition requested, mode={}, automatic={}", mode, automatic);
         state = automatic ? State.AUTO_TRANSCRIBING : State.TRANSCRIBING;
         view.transcriptArea.clear();
         view.statusLabel.setText(automatic ? "Распознавание речи..." : "Распознаём речь...");
@@ -331,7 +333,7 @@ final class VoiceAssistantController {
 
         CompletableFuture<String> transcription;
         try {
-            transcription = transcriptionServiceFor(settings.transcriptionMode()).transcribe(recording);
+            transcription = transcriptionServiceFor(mode).transcribe(recording);
         } catch (RuntimeException error) {
             transcription = CompletableFuture.failedFuture(error);
         }
@@ -341,6 +343,8 @@ final class VoiceAssistantController {
                         return;
                     }
                     if (error != null) {
+                        LOG.error("Recognition failed, mode={}, errorType={}", mode,
+                                error.getClass().getName());
                         state = State.IDLE;
                         view.statusLabel.setText("Ошибка распознавания речи: " + errorMessage(error));
                         if (automatic) {
@@ -352,6 +356,7 @@ final class VoiceAssistantController {
 
                     view.transcriptArea.setText(transcript == null ? "" : transcript);
                     if (transcript == null || transcript.isBlank()) {
+                        LOG.warn("Recognition returned no speech, mode={}", mode);
                         state = State.IDLE;
                         view.statusLabel.setText(automatic
                                 ? "Речь не распознана. Отправка в ИИ отменена."

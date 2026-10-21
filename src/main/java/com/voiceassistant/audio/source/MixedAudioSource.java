@@ -6,8 +6,11 @@ import com.voiceassistant.audio.processing.AudioMixer;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MixedAudioSource implements AudioSource {
+    private static final Logger LOG = LoggerFactory.getLogger(MixedAudioSource.class);
 
     private final MicrophoneAudioSource microphone =
             new MicrophoneAudioSource();
@@ -144,6 +147,8 @@ public class MixedAudioSource implements AudioSource {
         try {
             Files.deleteIfExists(path);
         } catch (IOException e) {
+            LOG.warn("Temporary audio cleanup failed, file={}, errorType={}",
+                    path.getFileName(), e.getClass().getName());
             System.err.println(
                     "Не удалось удалить временный файл: "
                             + path + ". " + e.getMessage()

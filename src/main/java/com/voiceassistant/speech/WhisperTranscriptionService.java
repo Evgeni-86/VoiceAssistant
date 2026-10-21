@@ -89,6 +89,8 @@ public class WhisperTranscriptionService implements TranscriptionService, AutoCl
 
             Path transcript = workDir.resolve("transcript.txt");
             if (!Files.isRegularFile(transcript)) {
+                LOG.error("Whisper transcript file missing, durationMs={}",
+                        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt));
                 throw new IllegalStateException("whisper-cli не создал файл с текстом");
             }
             String result = Files.readString(transcript, StandardCharsets.UTF_8).trim();

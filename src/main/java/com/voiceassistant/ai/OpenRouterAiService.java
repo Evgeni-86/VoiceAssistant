@@ -72,7 +72,9 @@ public final class OpenRouterAiService implements AiService {
         }
         messages.addObject().put("role", "user").put("content", message);
         payload.put("stream", true);
-        payload.putObject("reasoning").put("enabled", false);
+        if (!"openai/gpt-5-mini".equals(settings.openRouterModel())) {
+            payload.putObject("reasoning").put("enabled", false);
+        }
 
         HttpRequest request = HttpRequest.newBuilder(ENDPOINT)
                 .timeout(Duration.ofMinutes(10))

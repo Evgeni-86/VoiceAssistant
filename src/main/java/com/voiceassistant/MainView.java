@@ -66,7 +66,7 @@ final class MainView {
 
         sourceComboBox = new ComboBox<>();
         sourceComboBox.getItems().addAll(AudioSourceType.values());
-        sourceComboBox.setValue(AudioSourceType.SYSTEM);
+        sourceComboBox.setValue(AudioSourceType.MICROPHONE);
 
         recordButton = new Button("Начать запись");
         stopButton = new Button("Остановить запись");
