@@ -5,7 +5,8 @@ import java.util.Objects;
 
 public record AiSettings(AiMode mode, String deepSeekModel, String openRouterModel,
                          String openAiAudioModel, String openRouterAudioModel, String systemPrompt,
-                         boolean useConversationContext, int contextDepth) {
+                         boolean useConversationContext, int contextDepth,
+                         TranscriptionMode transcriptionMode) {
     public static final List<String> DEEPSEEK_MODELS = List.of("deepseek-flash", "deepseek-v4-pro");
     public static final List<String> OPENROUTER_MODELS = List.of("openrouter/free");
     public static final List<String> OPENAI_AUDIO_MODELS = List.of("gpt-audio-mini", "gpt-audio");
@@ -16,6 +17,7 @@ public record AiSettings(AiMode mode, String deepSeekModel, String openRouterMod
 
     public AiSettings {
         Objects.requireNonNull(mode);
+        Objects.requireNonNull(transcriptionMode);
         Objects.requireNonNull(systemPrompt);
         if (!DEEPSEEK_MODELS.contains(deepSeekModel)) {
             throw new IllegalArgumentException("Указана неподдерживаемая модель DeepSeek.");
@@ -40,7 +42,8 @@ public record AiSettings(AiMode mode, String deepSeekModel, String openRouterMod
     public static AiSettings defaults() {
         return new AiSettings(AiMode.STUB, DEEPSEEK_MODELS.getFirst(),
                 OPENROUTER_MODELS.getFirst(), OPENAI_AUDIO_MODELS.getFirst(),
-                OPENROUTER_AUDIO_MODELS.getFirst(), DEFAULT_PROMPT, false, 3);
+                OPENROUTER_AUDIO_MODELS.getFirst(), DEFAULT_PROMPT, false, 3,
+                TranscriptionMode.LOCAL);
     }
 
     public String model() {

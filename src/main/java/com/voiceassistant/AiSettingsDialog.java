@@ -3,6 +3,7 @@ package com.voiceassistant;
 import com.voiceassistant.ai.AiMode;
 import com.voiceassistant.ai.AiSettings;
 import com.voiceassistant.ai.AiSettingsService;
+import com.voiceassistant.ai.TranscriptionMode;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -40,6 +41,11 @@ final class AiSettingsDialog {
         mode.getItems().setAll(AiMode.values());
         mode.setValue(current.mode());
         mode.setMaxWidth(Double.MAX_VALUE);
+
+        ComboBox<TranscriptionMode> transcriptionMode = new ComboBox<>();
+        transcriptionMode.getItems().setAll(TranscriptionMode.values());
+        transcriptionMode.setValue(current.transcriptionMode());
+        transcriptionMode.setMaxWidth(Double.MAX_VALUE);
 
         ComboBox<String> model = new ComboBox<>();
         model.setMaxWidth(Double.MAX_VALUE);
@@ -158,7 +164,7 @@ final class AiSettingsDialog {
             try {
                 settings = new AiSettings(mode.getValue(), deepSeekModel[0], openRouterModel[0],
                         openAiAudioModel[0], openRouterAudioModel[0], prompt.getText(),
-                        useContext.isSelected(), contextDepth.getValue());
+                        useContext.isSelected(), contextDepth.getValue(), transcriptionMode.getValue());
             } catch (IllegalArgumentException | NullPointerException validationError) {
                 error.setText(validationError.getMessage() == null
                         ? "Заполните все настройки ИИ." : validationError.getMessage());
@@ -194,6 +200,7 @@ final class AiSettingsDialog {
 
         VBox content = new VBox(8,
                 new Label("Режим ИИ"), mode,
+                new Label("Способ распознавания речи"), transcriptionMode,
                 keyTitle, keyField, keyState, removeKey,
                 new Label("Модель"), model,
                 new Label("Системный промпт"), prompt, resetPrompt,

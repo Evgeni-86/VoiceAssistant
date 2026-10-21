@@ -49,7 +49,8 @@ public final class AiSettingsService {
                     properties.getProperty("openRouterAudioModel", AiSettings.OPENROUTER_AUDIO_MODELS.getFirst()),
                     properties.getProperty("systemPrompt"),
                     Boolean.parseBoolean(properties.getProperty("useConversationContext", "false")),
-                    Integer.parseInt(properties.getProperty("contextDepth", "3")));
+                    Integer.parseInt(properties.getProperty("contextDepth", "3")),
+                    TranscriptionMode.valueOf(properties.getProperty("transcriptionMode", "LOCAL")));
             LOG.info("Settings loaded, mode={}", loaded.mode());
             LOG.debug("Settings model selected, model={}", selectedModel(loaded));
             LOG.debug("Context settings, enabled={}, depth={}", loaded.useConversationContext(), loaded.contextDepth());
@@ -131,6 +132,7 @@ public final class AiSettingsService {
             properties.setProperty("systemPrompt", settings.systemPrompt());
             properties.setProperty("useConversationContext", Boolean.toString(settings.useConversationContext()));
             properties.setProperty("contextDepth", Integer.toString(settings.contextDepth()));
+            properties.setProperty("transcriptionMode", settings.transcriptionMode().name());
             writeProperties(properties);
             LOG.info("Settings saved, mode={}", settings.mode());
             LOG.debug("Settings model selected, model={}", selectedModel(settings));
