@@ -2,7 +2,7 @@ package com.voiceassistant;
 
 import com.voiceassistant.ai.AiMode;
 import com.voiceassistant.ai.AiSettings;
-import com.voiceassistant.ai.AiSettingsService;
+import com.voiceassistant.ai.settings.AiSettingsService;
 import com.voiceassistant.ai.TranscriptionMode;
 import javafx.application.Platform;
 import javafx.geometry.Insets;

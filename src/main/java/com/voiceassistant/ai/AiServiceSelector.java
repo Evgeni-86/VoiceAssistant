@@ -1,5 +1,10 @@
 package com.voiceassistant.ai;
 
+import com.voiceassistant.ai.conversation.ConversationContextService;
+import com.voiceassistant.ai.openrouter.OpenRouterAiService;
+import com.voiceassistant.ai.openrouter.OpenRouterAudioAiService;
+import com.voiceassistant.ai.settings.AiSettingsService;
+
 import java.net.http.HttpClient;
 import java.time.Duration;
 

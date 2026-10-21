@@ -1,5 +1,7 @@
 package com.voiceassistant.ai;
 
+import com.voiceassistant.ai.settings.AiSettingsService;
+
 import java.nio.file.Path;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;

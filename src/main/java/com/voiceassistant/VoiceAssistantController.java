@@ -1,14 +1,14 @@
 package com.voiceassistant;
 
 import com.voiceassistant.ai.AiService;
-import com.voiceassistant.ai.AiHistoryEntry;
+import com.voiceassistant.ai.conversation.AiHistoryEntry;
 import com.voiceassistant.ai.AiMode;
 import com.voiceassistant.ai.AiServiceSelector;
 import com.voiceassistant.ai.AiSettings;
-import com.voiceassistant.ai.AiSettingsService;
-import com.voiceassistant.ai.ConversationContextService;
+import com.voiceassistant.ai.settings.AiSettingsService;
+import com.voiceassistant.ai.conversation.ConversationContextService;
 import com.voiceassistant.ai.TranscriptionMode;
-import com.voiceassistant.ai.OpenRouterAudioAiService;
+import com.voiceassistant.ai.openrouter.OpenRouterAudioAiService;
 import com.voiceassistant.audio.AudioRecordingService;
 import com.voiceassistant.speech.TranscriptionService;
 import com.voiceassistant.speech.OpenRouterTranscriptionService;

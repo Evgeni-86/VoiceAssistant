@@ -1,6 +1,6 @@
 package com.voiceassistant;
 
-import com.voiceassistant.ai.AiHistoryEntry;
+import com.voiceassistant.ai.conversation.AiHistoryEntry;
 import com.voiceassistant.audio.AudioSourceType;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;

@@ -1,4 +1,4 @@
-package com.voiceassistant.ai;
+package com.voiceassistant.ai.settings;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,6 +11,8 @@ import java.util.Properties;
 import java.util.Map;
 import java.util.Set;
 import java.util.List;
+
+import com.voiceassistant.ai.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

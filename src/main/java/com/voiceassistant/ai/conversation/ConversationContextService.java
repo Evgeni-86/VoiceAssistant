@@ -1,8 +1,10 @@
-package com.voiceassistant.ai;
+package com.voiceassistant.ai.conversation;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
+import com.voiceassistant.ai.AiSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

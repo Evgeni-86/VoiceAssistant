@@ -1,4 +1,4 @@
-package com.voiceassistant.ai;
+package com.voiceassistant.ai.openrouter;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,6 +23,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.concurrent.TimeUnit;
+
+import com.voiceassistant.ai.*;
+import com.voiceassistant.ai.conversation.ConversationContextService;
+import com.voiceassistant.ai.settings.AiSettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
