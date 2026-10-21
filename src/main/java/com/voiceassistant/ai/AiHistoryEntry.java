@@ -13,12 +13,18 @@ public class AiHistoryEntry {
     private final UUID id = UUID.randomUUID();
     private final Instant createdAt = Instant.now();
     private final String request;
+    private final boolean textRequest;
     private final StringBuilder response = new StringBuilder();
     private String error;
     private Status status = Status.PROCESSING;
 
     public AiHistoryEntry(String request) {
+        this(request, true);
+    }
+
+    public AiHistoryEntry(String request, boolean textRequest) {
         this.request = request;
+        this.textRequest = textRequest;
     }
 
     public UUID getId() {
@@ -31,6 +37,10 @@ public class AiHistoryEntry {
 
     public String getRequest() {
         return request;
+    }
+
+    public boolean isTextRequest() {
+        return textRequest;
     }
 
     public String getResponse() {

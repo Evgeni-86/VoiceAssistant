@@ -18,13 +18,13 @@ public final class AiServiceSelector {
         this.settingsService = settingsService;
     }
 
-    public AiService serviceFor(AiSettings settings) {
+    public AiService serviceFor(AiSettings settings, ConversationContextService.Snapshot context) {
         return switch (settings.mode()) {
             case STUB -> stubService;
-            case OPENROUTER -> new OpenRouterAiService(settings, settingsService, httpClient);
-            case DEEPSEEK -> new DeepSeekAiService(settings, settingsService, httpClient);
+            case OPENROUTER -> new OpenRouterAiService(settings, settingsService, httpClient, context);
+            case DEEPSEEK -> new DeepSeekAiService(settings, settingsService, httpClient, context);
             case OPENAI_AUDIO -> openAiAudioStub;
-            case OPENROUTER_AUDIO -> new OpenRouterAudioAiService(settings, settingsService, httpClient);
+            case OPENROUTER_AUDIO -> new OpenRouterAudioAiService(settings, settingsService, httpClient, context);
         };
     }
 

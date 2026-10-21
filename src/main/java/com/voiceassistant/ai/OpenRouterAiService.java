@@ -31,13 +31,16 @@ public final class OpenRouterAiService implements AiService {
     private final AiSettings settings;
     private final AiSettingsService settingsService;
     private final HttpClient client;
+    private final ConversationContextService.Snapshot context;
     private final AtomicReference<CompletableFuture<?>> activeResponse = new AtomicReference<>();
     private final AtomicReference<InputStream> activeBody = new AtomicReference<>();
 
-    public OpenRouterAiService(AiSettings settings, AiSettingsService settingsService, HttpClient client) {
+    public OpenRouterAiService(AiSettings settings, AiSettingsService settingsService, HttpClient client,
+                               ConversationContextService.Snapshot context) {
         this.settings = settings;
         this.settingsService = settingsService;
         this.client = client;
+        this.context = context;
     }
 
     @Override
@@ -55,6 +58,10 @@ public final class OpenRouterAiService implements AiService {
         payload.put("model", settings.openRouterModel());
         var messages = payload.putArray("messages");
         messages.addObject().put("role", "system").put("content", settings.systemPrompt());
+        for (var exchange : context.textExchanges()) {
+            messages.addObject().put("role", "user").put("content", exchange.request());
+            messages.addObject().put("role", "assistant").put("content", exchange.response());
+        }
         messages.addObject().put("role", "user").put("content", message);
         payload.put("stream", true);
         payload.putObject("reasoning").put("enabled", false);

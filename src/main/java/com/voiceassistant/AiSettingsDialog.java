@@ -8,9 +8,12 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
+import javafx.scene.control.Separator;
+import javafx.scene.control.Spinner;
 import javafx.scene.control.TextArea;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -134,6 +137,13 @@ final class AiSettingsDialog {
         Button resetPrompt = new Button("Восстановить промпт по умолчанию");
         resetPrompt.setOnAction(event -> prompt.setText(AiSettings.DEFAULT_PROMPT));
 
+        CheckBox useContext = new CheckBox("Использовать контекст диалога");
+        useContext.setSelected(current.useConversationContext());
+        Spinner<Integer> contextDepth = new Spinner<>(1, 10, current.contextDepth());
+        contextDepth.disableProperty().bind(useContext.selectedProperty().not());
+        HBox contextDepthRow = new HBox(10, new Label("Глубина контекста"), contextDepth);
+        contextDepthRow.setAlignment(Pos.CENTER_LEFT);
+
         Label error = new Label();
         error.setWrapText(true);
         error.setStyle("-fx-text-fill: #b00020;");
@@ -147,7 +157,8 @@ final class AiSettingsDialog {
             AiSettings settings;
             try {
                 settings = new AiSettings(mode.getValue(), deepSeekModel[0], openRouterModel[0],
-                        openAiAudioModel[0], openRouterAudioModel[0], prompt.getText());
+                        openAiAudioModel[0], openRouterAudioModel[0], prompt.getText(),
+                        useContext.isSelected(), contextDepth.getValue());
             } catch (IllegalArgumentException | NullPointerException validationError) {
                 error.setText(validationError.getMessage() == null
                         ? "Заполните все настройки ИИ." : validationError.getMessage());
@@ -186,9 +197,10 @@ final class AiSettingsDialog {
                 keyTitle, keyField, keyState, removeKey,
                 new Label("Модель"), model,
                 new Label("Системный промпт"), prompt, resetPrompt,
+                new Separator(), new Label("Контекст диалога"), useContext, contextDepthRow,
                 error, actions);
         content.setPadding(new Insets(16));
-        stage.setScene(new Scene(content, 520, 540));
+        stage.setScene(new Scene(content, 520, 610));
 
     }
 

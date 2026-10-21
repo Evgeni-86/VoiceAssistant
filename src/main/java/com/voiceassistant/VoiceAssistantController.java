@@ -6,6 +6,7 @@ import com.voiceassistant.ai.AiMode;
 import com.voiceassistant.ai.AiServiceSelector;
 import com.voiceassistant.ai.AiSettings;
 import com.voiceassistant.ai.AiSettingsService;
+import com.voiceassistant.ai.ConversationContextService;
 import com.voiceassistant.audio.AudioRecordingService;
 import com.voiceassistant.speech.WhisperTranscriptionService;
 import javafx.animation.KeyFrame;
@@ -53,6 +54,7 @@ final class VoiceAssistantController {
     private Path lastRecording;
     private State state = State.IDLE;
     private final ObservableList<AiHistoryEntry> history = FXCollections.observableArrayList();
+    private final ConversationContextService contextService = new ConversationContextService(history);
     private MainView view;
     private Stage stage;
     private AiSettings settings;
@@ -148,6 +150,7 @@ final class VoiceAssistantController {
                             System.err.println("Ошибка завершения приложения: " + error.getMessage());
                         }
                         stage.setOnCloseRequest(null);
+                        contextService.clear();
                         stage.close();
                     }));
         });
@@ -353,9 +356,9 @@ final class VoiceAssistantController {
             updateControls();
             return;
         }
-        AiService aiService = aiServiceSelector.serviceFor(settings);
+        AiService aiService = aiServiceSelector.serviceFor(settings, contextService.snapshot(settings));
         AiSettings requestSettings = settings;
-        AiHistoryEntry entry = new AiHistoryEntry(message);
+        AiHistoryEntry entry = new AiHistoryEntry(message, audio == null);
         AiRequest request = new AiRequest(entry, aiService, automatic);
         activeAiRequest = request;
         history.add(0, entry);

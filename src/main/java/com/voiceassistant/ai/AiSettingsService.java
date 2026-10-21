@@ -43,7 +43,9 @@ public final class AiSettingsService {
                     properties.getProperty("openRouterModel", AiSettings.OPENROUTER_MODELS.getFirst()),
                     properties.getProperty("openAiAudioModel", AiSettings.OPENAI_AUDIO_MODELS.getFirst()),
                     properties.getProperty("openRouterAudioModel", AiSettings.OPENROUTER_AUDIO_MODELS.getFirst()),
-                    properties.getProperty("systemPrompt"));
+                    properties.getProperty("systemPrompt"),
+                    Boolean.parseBoolean(properties.getProperty("useConversationContext", "false")),
+                    Integer.parseInt(properties.getProperty("contextDepth", "3")));
         } catch (RuntimeException exception) {
             throw new IOException("Файл настроек ИИ повреждён или содержит неподдерживаемое значение.", exception);
         }
@@ -119,6 +121,8 @@ public final class AiSettingsService {
             properties.setProperty("openAiAudioModel", settings.openAiAudioModel());
             properties.setProperty("openRouterAudioModel", settings.openRouterAudioModel());
             properties.setProperty("systemPrompt", settings.systemPrompt());
+            properties.setProperty("useConversationContext", Boolean.toString(settings.useConversationContext()));
+            properties.setProperty("contextDepth", Integer.toString(settings.contextDepth()));
             writeProperties(properties);
         } catch (IOException | RuntimeException exception) {
             for (var previous : previousKeys.entrySet()) {

@@ -34,13 +34,16 @@ public final class OpenRouterAudioAiService implements AiService {
     private final AiSettings settings;
     private final AiSettingsService settingsService;
     private final HttpClient client;
+    private final ConversationContextService.Snapshot context;
     private final AtomicReference<CompletableFuture<?>> activeResponse = new AtomicReference<>();
     private final AtomicReference<InputStream> activeBody = new AtomicReference<>();
 
-    public OpenRouterAudioAiService(AiSettings settings, AiSettingsService settingsService, HttpClient client) {
+    public OpenRouterAudioAiService(AiSettings settings, AiSettingsService settingsService, HttpClient client,
+                                    ConversationContextService.Snapshot context) {
         this.settings = settings;
         this.settingsService = settingsService;
         this.client = client;
+        this.context = context;
     }
 
     @Override
@@ -69,6 +72,10 @@ public final class OpenRouterAudioAiService implements AiService {
         payload.put("model", settings.openRouterAudioModel());
         var messages = payload.putArray("messages");
         messages.addObject().put("role", "system").put("content", settings.systemPrompt());
+        if (!context.audioResponses().isEmpty()) {
+            messages.addObject().put("role", "system").put("content",
+                    ConversationContextService.audioContextBlock(context.audioResponses()));
+        }
         var content = messages.addObject().put("role", "user").putArray("content");
         content.addObject().put("type", "text").put("text", "Ответь на голосовой запрос пользователя.");
         content.addObject().put("type", "input_audio").putObject("input_audio")

@@ -4,7 +4,8 @@ import java.util.List;
 import java.util.Objects;
 
 public record AiSettings(AiMode mode, String deepSeekModel, String openRouterModel,
-                         String openAiAudioModel, String openRouterAudioModel, String systemPrompt) {
+                         String openAiAudioModel, String openRouterAudioModel, String systemPrompt,
+                         boolean useConversationContext, int contextDepth) {
     public static final List<String> DEEPSEEK_MODELS = List.of("deepseek-flash", "deepseek-v4-pro");
     public static final List<String> OPENROUTER_MODELS = List.of("openrouter/free");
     public static final List<String> OPENAI_AUDIO_MODELS = List.of("gpt-audio-mini", "gpt-audio");
@@ -31,12 +32,15 @@ public record AiSettings(AiMode mode, String deepSeekModel, String openRouterMod
         if (systemPrompt.isBlank()) {
             throw new IllegalArgumentException("Системный промпт не должен быть пустым.");
         }
+        if (contextDepth < 1 || contextDepth > 10) {
+            throw new IllegalArgumentException("Глубина контекста должна быть от 1 до 10.");
+        }
     }
 
     public static AiSettings defaults() {
         return new AiSettings(AiMode.STUB, DEEPSEEK_MODELS.getFirst(),
                 OPENROUTER_MODELS.getFirst(), OPENAI_AUDIO_MODELS.getFirst(),
-                OPENROUTER_AUDIO_MODELS.getFirst(), DEFAULT_PROMPT);
+                OPENROUTER_AUDIO_MODELS.getFirst(), DEFAULT_PROMPT, false, 3);
     }
 
     public String model() {

@@ -32,13 +32,16 @@ public final class DeepSeekAiService implements AiService {
     private final AiSettings settings;
     private final AiSettingsService settingsService;
     private final HttpClient client;
+    private final ConversationContextService.Snapshot context;
     private final AtomicReference<CompletableFuture<?>> activeResponse = new AtomicReference<>();
     private final AtomicReference<InputStream> activeBody = new AtomicReference<>();
 
-    public DeepSeekAiService(AiSettings settings, AiSettingsService settingsService, HttpClient client) {
+    public DeepSeekAiService(AiSettings settings, AiSettingsService settingsService, HttpClient client,
+                             ConversationContextService.Snapshot context) {
         this.settings = settings;
         this.settingsService = settingsService;
         this.client = client;
+        this.context = context;
     }
 
     @Override
@@ -61,6 +64,10 @@ public final class DeepSeekAiService implements AiService {
         payload.put("model", settings.deepSeekModel());
         var messages = payload.putArray("messages");
         messages.addObject().put("role", "system").put("content", settings.systemPrompt());
+        for (var exchange : context.textExchanges()) {
+            messages.addObject().put("role", "user").put("content", exchange.request());
+            messages.addObject().put("role", "assistant").put("content", exchange.response());
+        }
         messages.addObject().put("role", "user").put("content", message);
         payload.put("stream", true);
         // У приложения нет настройки глубины рассуждений; для краткого голосового ответа
