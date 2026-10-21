@@ -28,6 +28,10 @@ public final class AiServiceSelector {
         };
     }
 
+    public HttpClient httpClient() {
+        return httpClient;
+    }
+
     public void close() {
         httpClient.shutdownNow();
     }

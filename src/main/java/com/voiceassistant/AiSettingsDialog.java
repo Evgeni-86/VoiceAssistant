@@ -47,6 +47,13 @@ final class AiSettingsDialog {
         transcriptionMode.setValue(current.transcriptionMode());
         transcriptionMode.setMaxWidth(Double.MAX_VALUE);
 
+        ComboBox<String> transcriptionModel = new ComboBox<>();
+        transcriptionModel.getItems().setAll(AiSettings.TRANSCRIPTION_MODELS);
+        transcriptionModel.setValue(current.transcriptionModel());
+        transcriptionModel.setMaxWidth(Double.MAX_VALUE);
+        transcriptionModel.disableProperty().bind(
+                transcriptionMode.valueProperty().isNotEqualTo(TranscriptionMode.REMOTE));
+
         ComboBox<String> model = new ComboBox<>();
         model.setMaxWidth(Double.MAX_VALUE);
         final String[] deepSeekModel = {current.deepSeekModel()};
@@ -164,7 +171,8 @@ final class AiSettingsDialog {
             try {
                 settings = new AiSettings(mode.getValue(), deepSeekModel[0], openRouterModel[0],
                         openAiAudioModel[0], openRouterAudioModel[0], prompt.getText(),
-                        useContext.isSelected(), contextDepth.getValue(), transcriptionMode.getValue());
+                        useContext.isSelected(), contextDepth.getValue(), transcriptionMode.getValue(),
+                        transcriptionModel.getValue());
             } catch (IllegalArgumentException | NullPointerException validationError) {
                 error.setText(validationError.getMessage() == null
                         ? "Заполните все настройки ИИ." : validationError.getMessage());
@@ -201,13 +209,14 @@ final class AiSettingsDialog {
         VBox content = new VBox(8,
                 new Label("Режим ИИ"), mode,
                 new Label("Способ распознавания речи"), transcriptionMode,
+                new Label("Модель распознавания речи"), transcriptionModel,
                 keyTitle, keyField, keyState, removeKey,
                 new Label("Модель"), model,
                 new Label("Системный промпт"), prompt, resetPrompt,
                 new Separator(), new Label("Контекст диалога"), useContext, contextDepthRow,
                 error, actions);
         content.setPadding(new Insets(16));
-        stage.setScene(new Scene(content, 520, 610));
+        stage.setScene(new Scene(content, 520, 680));
 
     }
 

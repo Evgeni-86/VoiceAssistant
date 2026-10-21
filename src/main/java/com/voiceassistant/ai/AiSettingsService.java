@@ -50,7 +50,8 @@ public final class AiSettingsService {
                     properties.getProperty("systemPrompt"),
                     Boolean.parseBoolean(properties.getProperty("useConversationContext", "false")),
                     Integer.parseInt(properties.getProperty("contextDepth", "3")),
-                    TranscriptionMode.valueOf(properties.getProperty("transcriptionMode", "LOCAL")));
+                    TranscriptionMode.valueOf(properties.getProperty("transcriptionMode", "LOCAL")),
+                    properties.getProperty("transcriptionModel", AiSettings.TRANSCRIPTION_MODELS.getFirst()));
             LOG.info("Settings loaded, mode={}", loaded.mode());
             LOG.debug("Settings model selected, model={}", selectedModel(loaded));
             LOG.debug("Context settings, enabled={}, depth={}", loaded.useConversationContext(), loaded.contextDepth());
@@ -133,6 +134,7 @@ public final class AiSettingsService {
             properties.setProperty("useConversationContext", Boolean.toString(settings.useConversationContext()));
             properties.setProperty("contextDepth", Integer.toString(settings.contextDepth()));
             properties.setProperty("transcriptionMode", settings.transcriptionMode().name());
+            properties.setProperty("transcriptionModel", settings.transcriptionModel());
             writeProperties(properties);
             LOG.info("Settings saved, mode={}", settings.mode());
             LOG.debug("Settings model selected, model={}", selectedModel(settings));

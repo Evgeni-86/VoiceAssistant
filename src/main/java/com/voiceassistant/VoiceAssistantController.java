@@ -10,6 +10,7 @@ import com.voiceassistant.ai.ConversationContextService;
 import com.voiceassistant.ai.TranscriptionMode;
 import com.voiceassistant.audio.AudioRecordingService;
 import com.voiceassistant.speech.TranscriptionService;
+import com.voiceassistant.speech.OpenRouterTranscriptionService;
 import com.voiceassistant.speech.WhisperTranscriptionService;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
@@ -373,7 +374,8 @@ final class VoiceAssistantController {
     private TranscriptionService transcriptionServiceFor(TranscriptionMode mode) {
         return switch (mode) {
             case LOCAL -> transcriptionService;
-            case REMOTE -> throw new IllegalStateException("Удалённая транскрипция пока не реализована");
+            case REMOTE -> new OpenRouterTranscriptionService(
+                    settingsService, aiServiceSelector.httpClient(), aiExecutor, settings.transcriptionModel());
         };
     }
 
