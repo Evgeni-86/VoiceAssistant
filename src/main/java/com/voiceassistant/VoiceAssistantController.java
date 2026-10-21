@@ -7,7 +7,9 @@ import com.voiceassistant.ai.AiServiceSelector;
 import com.voiceassistant.ai.AiSettings;
 import com.voiceassistant.ai.AiSettingsService;
 import com.voiceassistant.ai.ConversationContextService;
+import com.voiceassistant.ai.TranscriptionMode;
 import com.voiceassistant.audio.AudioRecordingService;
+import com.voiceassistant.speech.TranscriptionService;
 import com.voiceassistant.speech.WhisperTranscriptionService;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
@@ -324,7 +326,13 @@ final class VoiceAssistantController {
         view.statusLabel.setText(automatic ? "Распознавание речи..." : "Распознаём речь...");
         updateControls();
 
-        transcriptionService.transcribe(recording)
+        CompletableFuture<String> transcription;
+        try {
+            transcription = transcriptionServiceFor(settings.transcriptionMode()).transcribe(recording);
+        } catch (RuntimeException error) {
+            transcription = CompletableFuture.failedFuture(error);
+        }
+        transcription
                 .whenComplete((transcript, error) -> Platform.runLater(() -> {
                     if (state == State.CLOSING) {
                         return;
@@ -360,6 +368,13 @@ final class VoiceAssistantController {
                         updateControls();
                     }
                 }));
+    }
+
+    private TranscriptionService transcriptionServiceFor(TranscriptionMode mode) {
+        return switch (mode) {
+            case LOCAL -> transcriptionService;
+            case REMOTE -> throw new IllegalStateException("Удалённая транскрипция пока не реализована");
+        };
     }
 
     private void sendToAi(String message, boolean automatic) {
