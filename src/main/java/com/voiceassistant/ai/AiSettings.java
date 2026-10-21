@@ -8,7 +8,8 @@ public record AiSettings(AiMode mode, String deepSeekModel, String openRouterMod
                          boolean useConversationContext, int contextDepth,
                          TranscriptionMode transcriptionMode, String transcriptionModel) {
     public static final List<String> DEEPSEEK_MODELS = List.of("deepseek-flash", "deepseek-v4-pro");
-    public static final List<String> OPENROUTER_MODELS = List.of("openrouter/free", "openai/gpt-audio-mini", "openai/gpt-audio");
+    public static final List<String> OPENROUTER_MODELS = List.of("openrouter/free", "qwen/qwen3-235b-a22b-2507",
+            "openai/gpt-4.1-mini", "openai/gpt-5-mini");
     public static final List<String> OPENAI_AUDIO_MODELS = List.of("gpt-audio-mini", "gpt-audio");
     public static final List<String> OPENROUTER_AUDIO_MODELS = List.of("openai/gpt-audio-mini", "openai/gpt-audio");
     public static final List<String> TRANSCRIPTION_MODELS = List.of(

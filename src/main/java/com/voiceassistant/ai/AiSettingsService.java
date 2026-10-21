@@ -41,10 +41,14 @@ public final class AiSettingsService {
         Properties properties = new Properties();
         try (InputStream input = Files.newInputStream(settingsFile)) {
             properties.load(input);
+            String openRouterModel = properties.getProperty("openRouterModel", AiSettings.OPENROUTER_MODELS.getFirst());
+            if (AiSettings.OPENROUTER_AUDIO_MODELS.contains(openRouterModel)) {
+                openRouterModel = AiSettings.OPENROUTER_MODELS.getFirst();
+            }
             AiSettings loaded = new AiSettings(
                     AiMode.valueOf(properties.getProperty("mode")),
                     properties.getProperty("deepSeekModel", properties.getProperty("model", AiSettings.DEEPSEEK_MODELS.getFirst())),
-                    properties.getProperty("openRouterModel", AiSettings.OPENROUTER_MODELS.getFirst()),
+                    openRouterModel,
                     properties.getProperty("openAiAudioModel", AiSettings.OPENAI_AUDIO_MODELS.getFirst()),
                     properties.getProperty("openRouterAudioModel", AiSettings.OPENROUTER_AUDIO_MODELS.getFirst()),
                     properties.getProperty("systemPrompt"),
