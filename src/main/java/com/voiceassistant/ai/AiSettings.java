@@ -10,7 +10,8 @@ public record AiSettings(AiMode mode, String openRouterModel,
     public static final List<String> OPENROUTER_MODELS = OpenRouterModel.modelIds();
     public static final List<String> OPENROUTER_AUDIO_MODELS = List.of("openai/gpt-audio-mini", "openai/gpt-audio");
     public static final List<String> TRANSCRIPTION_MODELS = List.of(
-            "openai/whisper-large-v3-turbo", "openai/whisper-large-v3", "openai/whisper-1");
+            "openai/whisper-large-v3-turbo", "openai/whisper-large-v3", "openai/whisper-1",
+            "openai/gpt-transcribe", "openai/gpt-4o-transcribe");
     public static final String DEFAULT_PROMPT = "Ты полезный русскоязычный голосовой ассистент. "
             + "Отвечай понятно, точно и по существу. Если пользователь задаёт технический вопрос, "
             + "по возможности объясняй на примерах.";
