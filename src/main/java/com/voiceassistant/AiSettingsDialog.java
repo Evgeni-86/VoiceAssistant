@@ -69,6 +69,7 @@ final class AiSettingsDialog {
         Label keyState = new Label();
         keyState.setWrapText(true);
         Button removeKey = new Button("Удалить сохранённый ключ");
+        removeKey.getStyleClass().add("danger-button");
         java.util.Map<AiMode, String> newKeys = new java.util.EnumMap<>(AiMode.class);
         java.util.Set<AiMode> deletedKeys = java.util.EnumSet.noneOf(AiMode.class);
         Runnable updateProvider = () -> {
@@ -148,8 +149,9 @@ final class AiSettingsDialog {
 
         Label error = new Label();
         error.setWrapText(true);
-        error.setStyle("-fx-text-fill: #b00020;");
+        error.getStyleClass().add("error-label");
         Button save = new Button("Сохранить");
+        save.getStyleClass().add("primary-button");
         Button cancel = new Button("Отмена");
         cancel.setOnAction(event -> stage.close());
         HBox actions = new HBox(10, save, cancel);
@@ -205,7 +207,9 @@ final class AiSettingsDialog {
                 new Separator(), new Label("Контекст диалога"), useContext, contextDepthRow,
                 error, actions);
         content.setPadding(new Insets(16));
-        stage.setScene(new Scene(content, 520, 680));
+        Scene scene = new Scene(content, 520, 680);
+        scene.getStylesheets().add(AiSettingsDialog.class.getResource("/response.css").toExternalForm());
+        stage.setScene(scene);
 
     }
 

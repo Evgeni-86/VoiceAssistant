@@ -10,6 +10,7 @@ public class VoiceAssistantApplication extends Application {
 
     @Override
     public void start(Stage stage) {
+        WindowsDarkTitleBar.install();
         LOG.info("Application starting, version={}", getClass().getPackage().getImplementationVersion() == null
                 ? "1.0-SNAPSHOT" : getClass().getPackage().getImplementationVersion());
         Thread.UncaughtExceptionHandler previousHandler = Thread.currentThread().getUncaughtExceptionHandler();
