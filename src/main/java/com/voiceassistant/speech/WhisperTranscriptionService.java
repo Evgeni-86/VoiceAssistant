@@ -15,12 +15,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Запускает локальный whisper-cli для сохранённого WAV. */
-public class WhisperTranscriptionService implements AutoCloseable {
+public class WhisperTranscriptionService implements TranscriptionService, AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(WhisperTranscriptionService.class);
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final AudioMixer audioMixer = new AudioMixer();
 
+    @Override
     public CompletableFuture<String> transcribe(Path recording) {
         return CompletableFuture.supplyAsync(() -> transcribeNow(recording), executor);
     }
@@ -88,6 +89,8 @@ public class WhisperTranscriptionService implements AutoCloseable {
 
             Path transcript = workDir.resolve("transcript.txt");
             if (!Files.isRegularFile(transcript)) {
+                LOG.error("Whisper transcript file missing, durationMs={}",
+                        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt));
                 throw new IllegalStateException("whisper-cli не создал файл с текстом");
             }
             String result = Files.readString(transcript, StandardCharsets.UTF_8).trim();

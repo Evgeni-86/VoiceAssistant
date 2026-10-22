@@ -1,4 +1,4 @@
-package com.voiceassistant.ai;
+package com.voiceassistant.ai.settings;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,6 +11,8 @@ import java.util.Properties;
 import java.util.Map;
 import java.util.Set;
 import java.util.List;
+
+import com.voiceassistant.ai.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,9 +30,7 @@ public final class AiSettingsService {
                 : Path.of(appData, "VoiceAssistant");
         settingsFile = directory.resolve("ai-settings.properties");
         secretStores = Map.of(
-                AiMode.DEEPSEEK, new WindowsDpapiSecretStore(directory.resolve("deepseek-key.dpapi")),
-                AiMode.OPENROUTER, new WindowsDpapiSecretStore(directory.resolve("openrouter-key.dpapi")),
-                AiMode.OPENAI_AUDIO, new WindowsDpapiSecretStore(directory.resolve("openai-audio-key.dpapi")));
+                AiMode.OPENROUTER, new WindowsDpapiSecretStore(directory.resolve("openrouter-key.dpapi")));
     }
 
     public AiSettings load() throws IOException {
@@ -41,15 +41,19 @@ public final class AiSettingsService {
         Properties properties = new Properties();
         try (InputStream input = Files.newInputStream(settingsFile)) {
             properties.load(input);
+            String openRouterModel = properties.getProperty("openRouterModel", AiSettings.OPENROUTER_MODELS.getFirst());
+            if (OpenRouterModel.fromModelId(openRouterModel) == null) {
+                openRouterModel = AiSettings.OPENROUTER_MODELS.getFirst();
+            }
             AiSettings loaded = new AiSettings(
-                    AiMode.valueOf(properties.getProperty("mode")),
-                    properties.getProperty("deepSeekModel", properties.getProperty("model", AiSettings.DEEPSEEK_MODELS.getFirst())),
-                    properties.getProperty("openRouterModel", AiSettings.OPENROUTER_MODELS.getFirst()),
-                    properties.getProperty("openAiAudioModel", AiSettings.OPENAI_AUDIO_MODELS.getFirst()),
-                    properties.getProperty("openRouterAudioModel", AiSettings.OPENROUTER_AUDIO_MODELS.getFirst()),
+                    migrateMode(properties.getProperty("mode")),
+                    openRouterModel,
+                    loadOpenRouterAudioModel(properties),
                     properties.getProperty("systemPrompt"),
                     Boolean.parseBoolean(properties.getProperty("useConversationContext", "false")),
-                    Integer.parseInt(properties.getProperty("contextDepth", "3")));
+                    Integer.parseInt(properties.getProperty("contextDepth", "3")),
+                    TranscriptionMode.valueOf(properties.getProperty("transcriptionMode", "LOCAL")),
+                    properties.getProperty("transcriptionModel", AiSettings.TRANSCRIPTION_MODELS.getFirst()));
             LOG.info("Settings loaded, mode={}", loaded.mode());
             LOG.debug("Settings model selected, model={}", selectedModel(loaded));
             LOG.debug("Context settings, enabled={}, depth={}", loaded.useConversationContext(), loaded.contextDepth());
@@ -68,6 +72,8 @@ public final class AiSettingsService {
                     Integer.toString(defaultSize)));
             return Math.clamp(size, 10, 30);
         } catch (IOException | IllegalArgumentException exception) {
+            LOG.warn("Response font size load failed; using default, errorType={}",
+                    exception.getClass().getName());
             return defaultSize;
         }
     }
@@ -81,9 +87,7 @@ public final class AiSettingsService {
         } else {
             AiSettings defaults = AiSettings.defaults();
             properties.setProperty("mode", defaults.mode().name());
-            properties.setProperty("deepSeekModel", defaults.deepSeekModel());
             properties.setProperty("openRouterModel", defaults.openRouterModel());
-            properties.setProperty("openAiAudioModel", defaults.openAiAudioModel());
             properties.setProperty("openRouterAudioModel", defaults.openRouterAudioModel());
             properties.setProperty("systemPrompt", defaults.systemPrompt());
         }
@@ -108,7 +112,7 @@ public final class AiSettingsService {
                                   Set<AiMode> deletedKeys) throws IOException {
         Map<AiMode, byte[]> previousKeys = new java.util.EnumMap<>(AiMode.class);
         try {
-            for (AiMode mode : List.of(AiMode.OPENROUTER, AiMode.DEEPSEEK, AiMode.OPENAI_AUDIO)) {
+            for (AiMode mode : List.of(AiMode.OPENROUTER)) {
                 String newKey = newKeys.get(mode);
                 if (deletedKeys.contains(mode) || newKey != null && !newKey.isBlank()) {
                     WindowsDpapiSecretStore secretStore = store(mode);
@@ -124,13 +128,15 @@ public final class AiSettingsService {
                 }
             }
             properties.setProperty("mode", settings.mode().name());
-            properties.setProperty("deepSeekModel", settings.deepSeekModel());
+            properties.remove("deepSeekModel");
+            properties.remove("openAiAudioModel");
             properties.setProperty("openRouterModel", settings.openRouterModel());
-            properties.setProperty("openAiAudioModel", settings.openAiAudioModel());
             properties.setProperty("openRouterAudioModel", settings.openRouterAudioModel());
             properties.setProperty("systemPrompt", settings.systemPrompt());
             properties.setProperty("useConversationContext", Boolean.toString(settings.useConversationContext()));
             properties.setProperty("contextDepth", Integer.toString(settings.contextDepth()));
+            properties.setProperty("transcriptionMode", settings.transcriptionMode().name());
+            properties.setProperty("transcriptionModel", settings.transcriptionModel());
             writeProperties(properties);
             LOG.info("Settings saved, mode={}", settings.mode());
             LOG.debug("Settings model selected, model={}", selectedModel(settings));
@@ -139,7 +145,11 @@ public final class AiSettingsService {
             LOG.error("Settings save failed, errorType={}", exception.getClass().getName());
             for (var previous : previousKeys.entrySet()) {
                 try { store(previous.getKey()).restore(previous.getValue()); }
-                catch (IOException rollbackError) { exception.addSuppressed(rollbackError); }
+                catch (IOException rollbackError) {
+                    LOG.error("API key rollback failed, mode={}, errorType={}",
+                            previous.getKey(), rollbackError.getClass().getName());
+                    exception.addSuppressed(rollbackError);
+                }
             }
             throw new IOException("Не удалось сохранить настройки ИИ.", exception);
         }
@@ -147,12 +157,26 @@ public final class AiSettingsService {
 
     private static String selectedModel(AiSettings settings) {
         return switch (settings.mode()) {
-            case DEEPSEEK -> settings.deepSeekModel();
             case OPENROUTER -> settings.openRouterModel();
             case OPENROUTER_AUDIO -> settings.openRouterAudioModel();
-            case OPENAI_AUDIO -> settings.openAiAudioModel();
             case STUB -> "stub";
         };
+    }
+
+    private static AiMode migrateMode(String savedMode) {
+        return switch (savedMode) {
+            case "DEEPSEEK" -> AiMode.OPENROUTER;
+            case "OPENAI_AUDIO" -> AiMode.OPENROUTER_AUDIO;
+            default -> AiMode.valueOf(savedMode);
+        };
+    }
+
+    private static String loadOpenRouterAudioModel(Properties properties) {
+        if ("OPENAI_AUDIO".equals(properties.getProperty("mode"))) {
+            String model = "openai/" + properties.getProperty("openAiAudioModel", "gpt-audio-mini");
+            if (AiSettings.OPENROUTER_AUDIO_MODELS.contains(model)) return model;
+        }
+        return properties.getProperty("openRouterAudioModel", AiSettings.OPENROUTER_AUDIO_MODELS.getFirst());
     }
 
     private void writeProperties(Properties properties) throws IOException {

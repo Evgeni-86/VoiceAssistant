@@ -1,4 +1,4 @@
-package com.voiceassistant.ai;
+package com.voiceassistant.ai.conversation;
 
 import java.time.Instant;
 import java.util.UUID;

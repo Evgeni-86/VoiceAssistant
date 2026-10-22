@@ -2,7 +2,8 @@ package com.voiceassistant;
 
 import com.voiceassistant.ai.AiMode;
 import com.voiceassistant.ai.AiSettings;
-import com.voiceassistant.ai.AiSettingsService;
+import com.voiceassistant.ai.settings.AiSettingsService;
+import com.voiceassistant.ai.TranscriptionMode;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -41,18 +42,26 @@ final class AiSettingsDialog {
         mode.setValue(current.mode());
         mode.setMaxWidth(Double.MAX_VALUE);
 
+        ComboBox<TranscriptionMode> transcriptionMode = new ComboBox<>();
+        transcriptionMode.getItems().setAll(TranscriptionMode.values());
+        transcriptionMode.setValue(current.transcriptionMode());
+        transcriptionMode.setMaxWidth(Double.MAX_VALUE);
+
+        ComboBox<String> transcriptionModel = new ComboBox<>();
+        transcriptionModel.getItems().setAll(AiSettings.TRANSCRIPTION_MODELS);
+        transcriptionModel.setValue(current.transcriptionModel());
+        transcriptionModel.setMaxWidth(Double.MAX_VALUE);
+        transcriptionModel.disableProperty().bind(
+                transcriptionMode.valueProperty().isNotEqualTo(TranscriptionMode.REMOTE));
+
         ComboBox<String> model = new ComboBox<>();
         model.setMaxWidth(Double.MAX_VALUE);
-        final String[] deepSeekModel = {current.deepSeekModel()};
         final String[] openRouterModel = {current.openRouterModel()};
-        final String[] openAiAudioModel = {current.openAiAudioModel()};
         final String[] openRouterAudioModel = {current.openRouterAudioModel()};
         model.valueProperty().addListener((obs, oldValue, value) -> {
             if (value == null) return;
             if (mode.getValue() == AiMode.OPENROUTER) openRouterModel[0] = value;
-            else if (mode.getValue() == AiMode.OPENAI_AUDIO) openAiAudioModel[0] = value;
             else if (mode.getValue() == AiMode.OPENROUTER_AUDIO) openRouterAudioModel[0] = value;
-            else deepSeekModel[0] = value;
         });
 
         PasswordField keyField = new PasswordField();
@@ -60,21 +69,20 @@ final class AiSettingsDialog {
         Label keyState = new Label();
         keyState.setWrapText(true);
         Button removeKey = new Button("Удалить сохранённый ключ");
+        removeKey.getStyleClass().add("danger-button");
         java.util.Map<AiMode, String> newKeys = new java.util.EnumMap<>(AiMode.class);
         java.util.Set<AiMode> deletedKeys = java.util.EnumSet.noneOf(AiMode.class);
         Runnable updateProvider = () -> {
             AiMode selected = mode.getValue();
             model.getItems().setAll(switch (selected) {
                 case OPENROUTER -> AiSettings.OPENROUTER_MODELS;
-                case OPENAI_AUDIO -> AiSettings.OPENAI_AUDIO_MODELS;
                 case OPENROUTER_AUDIO -> AiSettings.OPENROUTER_AUDIO_MODELS;
-                case STUB, DEEPSEEK -> AiSettings.DEEPSEEK_MODELS;
+                case STUB -> AiSettings.OPENROUTER_MODELS;
             });
             model.setValue(switch (selected) {
                 case OPENROUTER -> openRouterModel[0];
-                case OPENAI_AUDIO -> openAiAudioModel[0];
                 case OPENROUTER_AUDIO -> openRouterAudioModel[0];
-                case STUB, DEEPSEEK -> deepSeekModel[0];
+                case STUB -> openRouterModel[0];
             });
             model.setDisable(selected == AiMode.STUB);
             boolean usesKey = selected != AiMode.STUB;
@@ -88,12 +96,7 @@ final class AiSettingsDialog {
             removeKey.setManaged(usesKey);
             if (usesKey) {
                 AiMode keyMode = selected == AiMode.OPENROUTER_AUDIO ? AiMode.OPENROUTER : selected;
-                String provider = switch (selected) {
-                    case OPENROUTER, OPENROUTER_AUDIO -> "OpenRouter";
-                    case DEEPSEEK -> "DeepSeek";
-                    case OPENAI_AUDIO -> "OpenAI Audio";
-                    case STUB -> throw new IllegalStateException();
-                };
+                String provider = "OpenRouter";
                 keyTitle.setText("API-ключ " + provider);
                 keyField.setPromptText("Новый API-ключ " + provider);
                 keyField.setText(newKeys.getOrDefault(keyMode, ""));
@@ -146,8 +149,9 @@ final class AiSettingsDialog {
 
         Label error = new Label();
         error.setWrapText(true);
-        error.setStyle("-fx-text-fill: #b00020;");
+        error.getStyleClass().add("error-label");
         Button save = new Button("Сохранить");
+        save.getStyleClass().add("primary-button");
         Button cancel = new Button("Отмена");
         cancel.setOnAction(event -> stage.close());
         HBox actions = new HBox(10, save, cancel);
@@ -156,9 +160,10 @@ final class AiSettingsDialog {
         save.setOnAction(event -> {
             AiSettings settings;
             try {
-                settings = new AiSettings(mode.getValue(), deepSeekModel[0], openRouterModel[0],
-                        openAiAudioModel[0], openRouterAudioModel[0], prompt.getText(),
-                        useContext.isSelected(), contextDepth.getValue());
+                settings = new AiSettings(mode.getValue(), openRouterModel[0],
+                        openRouterAudioModel[0], prompt.getText(),
+                        useContext.isSelected(), contextDepth.getValue(), transcriptionMode.getValue(),
+                        transcriptionModel.getValue());
             } catch (IllegalArgumentException | NullPointerException validationError) {
                 error.setText(validationError.getMessage() == null
                         ? "Заполните все настройки ИИ." : validationError.getMessage());
@@ -194,13 +199,17 @@ final class AiSettingsDialog {
 
         VBox content = new VBox(8,
                 new Label("Режим ИИ"), mode,
+                new Label("Способ распознавания речи"), transcriptionMode,
+                new Label("Модель распознавания речи"), transcriptionModel,
                 keyTitle, keyField, keyState, removeKey,
                 new Label("Модель"), model,
                 new Label("Системный промпт"), prompt, resetPrompt,
                 new Separator(), new Label("Контекст диалога"), useContext, contextDepthRow,
                 error, actions);
         content.setPadding(new Insets(16));
-        stage.setScene(new Scene(content, 520, 610));
+        Scene scene = new Scene(content, 520, 680);
+        scene.getStylesheets().add(AiSettingsDialog.class.getResource("/response.css").toExternalForm());
+        stage.setScene(scene);
 
     }
 

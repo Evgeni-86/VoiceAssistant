@@ -1,4 +1,4 @@
-package com.voiceassistant.ai;
+package com.voiceassistant.ai.settings;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;

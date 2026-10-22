@@ -1,0 +1,310 @@
+.root {
+    -va-background: #111A23;
+    -va-panel: #172029;
+    -va-container: #1A242F;
+    -va-text-surface: #131B23;
+    -va-control: #253240;
+    -va-border: #354B5E;
+    -va-text: #C9D6E4;
+    -va-secondary: #91A3B9;
+    -va-muted: #6C7F92;
+    -va-blue: #42CFFF;
+    -va-teal: #083342;
+    -va-green: #4AF08A;
+    -va-red: #F4434B;
+    -va-burgundy: #491F29;
+    -va-orange: #E3AB61;
+    -va-dark-orange: #49321F;
+    -fx-background-color: -va-background;
+    -fx-text-fill: -va-text;
+    -fx-accent: -va-teal;
+    -fx-focus-color: -va-blue;
+    -fx-faint-focus-color: transparent;
+}
+
+.label, .check-box {
+    -fx-text-fill: -va-text;
+}
+
+.top-panel, .status-bar {
+    -fx-background-color: -va-panel;
+}
+
+.status-bar, .ai-status, .tooltip {
+    -fx-text-fill: -va-secondary;
+}
+
+.status-bar:active-status, .ai-status:active-status {
+    -fx-text-fill: -va-green;
+}
+
+.status-bar:working-status, .ai-status:working-status {
+    -fx-text-fill: -va-orange;
+}
+
+.status-bar:error-status, .ai-status:error-status, .error-label {
+    -fx-text-fill: -va-red;
+}
+
+.button {
+    -fx-background-color: -va-border, -va-control;
+    -fx-background-insets: 0, 1;
+    -fx-text-fill: -va-text;
+}
+
+.button:hover, .settings-button:hover {
+    -fx-background-color: -va-blue, -va-teal;
+    -fx-text-fill: -va-blue;
+}
+
+.button:pressed {
+    -fx-background-color: -va-border, -va-container;
+}
+
+.button:focused {
+    -fx-background-color: -va-blue, -va-control;
+}
+
+.button:disabled {
+    -fx-opacity: 1;
+    -fx-background-color: -va-panel, -va-container;
+    -fx-text-fill: -va-muted;
+}
+
+.record-button {
+    -fx-background-color: -va-green, -va-control;
+    -fx-text-fill: -va-green;
+}
+
+.record-button:hover {
+    -fx-background-color: -va-green, -va-teal;
+    -fx-text-fill: -va-green;
+}
+
+.danger-button {
+    -fx-background-color: -va-red, -va-burgundy;
+    -fx-text-fill: -va-red;
+}
+
+.danger-button:hover {
+    -fx-background-color: -va-red, -va-control;
+    -fx-text-fill: -va-red;
+}
+
+.primary-button {
+    -fx-background-color: -va-blue, -va-teal;
+    -fx-text-fill: -va-blue;
+}
+
+.primary-button:hover {
+    -fx-background-color: -va-blue, -va-control;
+    -fx-text-fill: -va-blue;
+}
+
+.tab-pane, .tab-pane .tab-content-area {
+    -fx-background-color: -va-container;
+}
+
+.tab-pane .tab-header-area .tab-header-background {
+    -fx-background-color: -va-panel;
+}
+
+.tab-pane .tab {
+    -fx-background-color: -va-control;
+}
+
+.tab-pane .tab:selected {
+    -fx-background-color: -va-blue, -va-container;
+    -fx-background-insets: 0, 0 0 2 0;
+}
+
+.tab-pane .tab .tab-label {
+    -fx-text-fill: -va-text;
+}
+
+.tab-pane .tab:hover {
+    -fx-background-color: -va-border;
+}
+
+.tab-pane .tab:selected:hover {
+    -fx-background-color: -va-blue, -va-container;
+    -fx-background-insets: 0, 0 0 2 0;
+}
+
+.text-area, .text-field, .password-field {
+    -fx-background-color: -va-border, -va-text-surface;
+    -fx-background-insets: 0, 1;
+    -fx-control-inner-background: -va-text-surface;
+    -fx-text-fill: -va-text;
+    -fx-prompt-text-fill: -va-secondary;
+    -fx-highlight-fill: -va-teal;
+    -fx-highlight-text-fill: -va-text;
+}
+
+.text-area:focused, .text-field:focused, .password-field:focused {
+    -fx-background-color: -va-blue, -va-text-surface;
+}
+
+.text-area .scroll-pane, .text-area .scroll-pane .viewport,
+.text-area .content {
+    -fx-background-color: -va-text-surface;
+}
+
+.ai-response-area .text {
+    -fx-line-spacing: -4;
+}
+
+.combo-box {
+    -fx-background-color: -va-border, -va-control;
+    -fx-background-insets: 0, 1;
+}
+
+.combo-box:focused {
+    -fx-background-color: -va-blue, -va-control;
+}
+
+.combo-box:disabled {
+    -fx-opacity: 1;
+    -fx-background-color: -va-border, -va-panel;
+}
+
+.combo-box .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: -va-text;
+}
+
+.combo-box:disabled .list-cell {
+    -fx-text-fill: -va-muted;
+}
+
+.combo-box .arrow-button {
+    -fx-background-color: -va-control;
+}
+
+.combo-box .arrow {
+    -fx-background-color: -va-secondary;
+}
+
+.combo-box-popup .list-view {
+    -fx-background-color: -va-border, -va-container;
+    -fx-background-insets: 0, 1;
+    -fx-control-inner-background: -va-container;
+}
+
+.combo-box-popup .list-cell {
+    -fx-background-color: -va-container;
+    -fx-text-fill: -va-text;
+}
+
+.combo-box-popup .list-cell:hover,
+.combo-box-popup .list-cell:filled:selected {
+    -fx-background-color: -va-teal;
+    -fx-text-fill: -va-text;
+}
+
+.list-view {
+    -fx-background-color: -va-border, -va-text-surface;
+    -fx-background-insets: 0, 1;
+    -fx-control-inner-background: -va-text-surface;
+}
+
+.list-view .list-cell {
+    -fx-background-color: -va-text-surface;
+    -fx-text-fill: -va-text;
+}
+
+.list-view .list-cell:filled:hover {
+    -fx-background-color: -va-control;
+}
+
+.list-view .list-cell:filled:selected,
+.list-view:focused .list-cell:filled:selected,
+.list-view .list-cell:filled:selected:hover {
+    -fx-background-color: -va-teal;
+    -fx-text-fill: -va-text;
+}
+
+.list-view .placeholder, .list-view .placeholder .label {
+    -fx-background-color: -va-text-surface;
+    -fx-text-fill: -va-secondary;
+}
+
+.scroll-pane, .scroll-pane .viewport {
+    -fx-background-color: -va-container;
+}
+
+.scroll-bar {
+    -fx-background-color: -va-panel;
+}
+
+.scroll-bar .track, .scroll-bar .track-background,
+.scroll-bar .increment-button, .scroll-bar .decrement-button {
+    -fx-background-color: -va-panel;
+}
+
+.scroll-bar .thumb {
+    -fx-background-color: -va-border;
+}
+
+.scroll-bar .thumb:hover {
+    -fx-background-color: -va-secondary;
+}
+
+.scroll-bar .increment-arrow, .scroll-bar .decrement-arrow {
+    -fx-background-color: -va-secondary;
+}
+
+.spinner {
+    -fx-background-color: -va-border, -va-control;
+    -fx-background-insets: 0, 1;
+}
+
+.spinner .text-field {
+    -fx-background-color: -va-text-surface;
+    -fx-text-fill: -va-text;
+}
+
+.spinner .increment-arrow-button, .spinner .decrement-arrow-button {
+    -fx-background-color: -va-control;
+}
+
+.spinner .increment-arrow, .spinner .decrement-arrow {
+    -fx-background-color: -va-secondary;
+}
+
+.spinner:disabled {
+    -fx-opacity: 1;
+}
+
+.spinner:disabled .text-field {
+    -fx-text-fill: -va-muted;
+}
+
+.check-box .box {
+    -fx-background-color: -va-border, -va-control;
+    -fx-background-insets: 0, 1;
+}
+
+.check-box:selected .box {
+    -fx-background-color: -va-blue, -va-teal;
+}
+
+.check-box:selected .mark {
+    -fx-background-color: -va-blue;
+}
+
+.separator .line {
+    -fx-border-color: -va-border;
+}
+
+.tooltip {
+    -fx-background-color: -va-control;
+}
+
+.dialog-pane {
+    -fx-background-color: -va-background;
+}
+
+.dialog-pane .header-panel {
+    -fx-background-color: -va-panel;
+}

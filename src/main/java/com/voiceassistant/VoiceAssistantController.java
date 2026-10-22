@@ -1,13 +1,17 @@
 package com.voiceassistant;
 
 import com.voiceassistant.ai.AiService;
-import com.voiceassistant.ai.AiHistoryEntry;
+import com.voiceassistant.ai.conversation.AiHistoryEntry;
 import com.voiceassistant.ai.AiMode;
 import com.voiceassistant.ai.AiServiceSelector;
 import com.voiceassistant.ai.AiSettings;
-import com.voiceassistant.ai.AiSettingsService;
-import com.voiceassistant.ai.ConversationContextService;
+import com.voiceassistant.ai.settings.AiSettingsService;
+import com.voiceassistant.ai.conversation.ConversationContextService;
+import com.voiceassistant.ai.TranscriptionMode;
+import com.voiceassistant.ai.openrouter.OpenRouterAudioAiService;
 import com.voiceassistant.audio.AudioRecordingService;
+import com.voiceassistant.speech.TranscriptionService;
+import com.voiceassistant.speech.OpenRouterTranscriptionService;
 import com.voiceassistant.speech.WhisperTranscriptionService;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
@@ -320,16 +324,27 @@ final class VoiceAssistantController {
     }
 
     private void transcribe(Path recording, boolean automatic) {
+        TranscriptionMode mode = settings.transcriptionMode();
+        LOG.info("Recognition requested, mode={}, automatic={}", mode, automatic);
         state = automatic ? State.AUTO_TRANSCRIBING : State.TRANSCRIBING;
+        view.transcriptArea.clear();
         view.statusLabel.setText(automatic ? "Распознавание речи..." : "Распознаём речь...");
         updateControls();
 
-        transcriptionService.transcribe(recording)
+        CompletableFuture<String> transcription;
+        try {
+            transcription = transcriptionServiceFor(mode).transcribe(recording);
+        } catch (RuntimeException error) {
+            transcription = CompletableFuture.failedFuture(error);
+        }
+        transcription
                 .whenComplete((transcript, error) -> Platform.runLater(() -> {
                     if (state == State.CLOSING) {
                         return;
                     }
                     if (error != null) {
+                        LOG.error("Recognition failed, mode={}, errorType={}", mode,
+                                error.getClass().getName());
                         state = State.IDLE;
                         view.statusLabel.setText("Ошибка распознавания речи: " + errorMessage(error));
                         if (automatic) {
@@ -341,6 +356,7 @@ final class VoiceAssistantController {
 
                     view.transcriptArea.setText(transcript == null ? "" : transcript);
                     if (transcript == null || transcript.isBlank()) {
+                        LOG.warn("Recognition returned no speech, mode={}", mode);
                         state = State.IDLE;
                         view.statusLabel.setText(automatic
                                 ? "Речь не распознана. Отправка в ИИ отменена."
@@ -360,6 +376,14 @@ final class VoiceAssistantController {
                         updateControls();
                     }
                 }));
+    }
+
+    private TranscriptionService transcriptionServiceFor(TranscriptionMode mode) {
+        return switch (mode) {
+            case LOCAL -> transcriptionService;
+            case REMOTE -> new OpenRouterTranscriptionService(
+                    settingsService, aiServiceSelector.httpClient(), aiExecutor, settings.transcriptionModel());
+        };
     }
 
     private void sendToAi(String message, boolean automatic) {
@@ -396,6 +420,9 @@ final class VoiceAssistantController {
         }
 
         state = automatic ? State.AUTO_SENDING_AI : State.SENDING_AI;
+        if (audio != null && aiService instanceof OpenRouterAudioAiService) {
+            view.transcriptArea.clear();
+        }
         view.aiResponseArea.clear();
         view.aiStatusLabel.setText("Генерация ответа ИИ...");
         if (automatic) {
@@ -413,6 +440,14 @@ final class VoiceAssistantController {
                 try {
                     if (audio == null) {
                         aiService.streamMessage(message, request::accept, request.cancelled::get);
+                    } else if (aiService instanceof OpenRouterAudioAiService audioService) {
+                        audioService.streamAudio(audio, requestSettings, settingsService,
+                                question -> Platform.runLater(() -> {
+                                    if (activeAiRequest == request && !request.cancelled.get()
+                                            && state != State.CLOSING) {
+                                        view.transcriptArea.setText(question);
+                                    }
+                                }), request::accept, request.cancelled::get);
                     } else {
                         aiService.streamAudio(audio, requestSettings, settingsService,
                                 request::accept, request.cancelled::get);
@@ -513,27 +548,23 @@ final class VoiceAssistantController {
 
     private boolean aiAvailable() {
         if (settings == null) return false;
-        if (settings.mode() == AiMode.STUB || settings.mode() == AiMode.OPENAI_AUDIO) return true;
+        if (settings.mode() == AiMode.STUB) return true;
         AiMode mode = settings.mode();
         if (!settingsService.hasApiKey(mode)) {
-            String provider = mode == AiMode.DEEPSEEK ? "DeepSeek" : "OpenRouter";
-            view.aiStatusLabel.setText("Не настроен API-ключ " + provider + ". Откройте настройки ИИ.");
+            view.aiStatusLabel.setText("Не настроен API-ключ OpenRouter. Откройте настройки ИИ.");
             return false;
         }
         return true;
     }
 
     private boolean directAudioMode() {
-        return settings != null && (settings.mode() == AiMode.OPENAI_AUDIO
-                || settings.mode() == AiMode.OPENROUTER_AUDIO);
+        return settings != null && settings.mode() == AiMode.OPENROUTER_AUDIO;
     }
 
     private static String modeName(AiMode mode) {
         return switch (mode) {
             case STUB -> "Stub";
             case OPENROUTER -> "OpenRouter";
-            case DEEPSEEK -> "DeepSeek";
-            case OPENAI_AUDIO -> "OpenAI Audio";
             case OPENROUTER_AUDIO -> "OpenRouter Audio";
         };
     }

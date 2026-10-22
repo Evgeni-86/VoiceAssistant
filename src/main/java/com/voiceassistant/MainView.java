@@ -1,8 +1,9 @@
 package com.voiceassistant;
 
-import com.voiceassistant.ai.AiHistoryEntry;
+import com.voiceassistant.ai.conversation.AiHistoryEntry;
 import com.voiceassistant.audio.AudioSourceType;
 import javafx.collections.ObservableList;
+import javafx.css.PseudoClass;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.geometry.Rectangle2D;
@@ -31,6 +32,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.function.IntConsumer;
 
 final class MainView {
+    private static final PseudoClass ACTIVE_STATUS = PseudoClass.getPseudoClass("active-status");
+    private static final PseudoClass ERROR_STATUS = PseudoClass.getPseudoClass("error-status");
+    private static final PseudoClass WORKING_STATUS = PseudoClass.getPseudoClass("working-status");
     private static final DateTimeFormatter HISTORY_TIME_FORMAT =
             DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")
                     .withZone(ZoneId.systemDefault());
@@ -59,24 +63,36 @@ final class MainView {
         statusLabel = new Label("Готов к записи");
         statusLabel.setWrapText(true);
         statusLabel.setMaxWidth(Double.MAX_VALUE);
+        statusLabel.getStyleClass().add("status-bar");
+        statusLabel.textProperty().addListener((observable, oldText, text) -> updateStatusAppearance(statusLabel, text));
+        updateStatusAppearance(statusLabel, statusLabel.getText());
         aiModeLabel = new Label("ИИ: загрузка настроек…");
         aiSettingsButton = new Button("⚙");
+        aiSettingsButton.getStyleClass().add("settings-button");
         aiSettingsButton.setTooltip(new javafx.scene.control.Tooltip("Настройки ИИ"));
         aiStatusLabel = new Label("ИИ: готов к отправке");
+        aiStatusLabel.getStyleClass().add("ai-status");
+        aiStatusLabel.textProperty().addListener((observable, oldText, text) -> updateStatusAppearance(aiStatusLabel, text));
+        updateStatusAppearance(aiStatusLabel, aiStatusLabel.getText());
 
         sourceComboBox = new ComboBox<>();
         sourceComboBox.getItems().addAll(AudioSourceType.values());
-        sourceComboBox.setValue(AudioSourceType.SYSTEM);
+        sourceComboBox.setValue(AudioSourceType.MICROPHONE);
 
         recordButton = new Button("Начать запись");
         stopButton = new Button("Остановить запись");
         finishAndSendButton = new Button("Завершить и отправить в ИИ");
         transcribeButton = new Button("Распознать речь");
         sendToAiButton = new Button("Отправить в ИИ");
+        recordButton.getStyleClass().add("record-button");
+        stopButton.getStyleClass().add("danger-button");
+        finishAndSendButton.getStyleClass().add("primary-button");
+        sendToAiButton.getStyleClass().add("primary-button");
+        transcribeButton.getStyleClass().add("primary-button");
 
         transcriptArea = new TextArea();
         transcriptArea.setWrapText(true);
-        transcriptArea.setPromptText("Здесь появится текст записи");
+        transcriptArea.setPromptText("Здесь появится распознанный вопрос");
         transcriptArea.setPrefRowCount(1);
         transcriptArea.setMinHeight(Region.USE_PREF_SIZE);
         transcriptArea.setMaxHeight(Region.USE_PREF_SIZE);
@@ -88,6 +104,7 @@ final class MainView {
                 updateTextAreaRows(transcriptArea, 6));
 
         aiResponseArea = new TextArea();
+        aiResponseArea.getStyleClass().add("ai-response-area");
         aiResponseArea.setEditable(false);
         aiResponseArea.setWrapText(true);
         aiResponseArea.setPromptText("Здесь появится тестовый ответ ИИ");
@@ -127,6 +144,7 @@ final class MainView {
         historyRequestArea.widthProperty().addListener((observable, oldWidth, newWidth) ->
                 updateTextAreaRows(historyRequestArea, 5));
         historyResponseArea = new TextArea();
+        historyResponseArea.getStyleClass().add("ai-response-area");
         historyResponseArea.setEditable(false);
         historyResponseArea.setWrapText(true);
         historyResponseArea.setPrefRowCount(3);
@@ -134,12 +152,15 @@ final class MainView {
                 .addListener((observable, oldEntry, newEntry) -> showHistoryDetails(newEntry));
 
         Button clearHistoryButton = new Button("Очистить историю");
+        clearHistoryButton.getStyleClass().add("danger-button");
         clearHistoryButton.setOnAction(event -> {
             Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION);
             confirmation.initOwner(stage);
             confirmation.setTitle("Очистка истории");
             confirmation.setHeaderText(null);
             confirmation.setContentText("Удалить всю историю запросов и ответов?");
+            confirmation.getDialogPane().getStylesheets().add(
+                    MainView.class.getResource("/response.css").toExternalForm());
             if (confirmation.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
                 history.clear();
                 historyListView.getSelectionModel().clearSelection();
@@ -147,7 +168,7 @@ final class MainView {
             }
         });
 
-        Label transcriptLabel = new Label("Распознанный текст:");
+        Label transcriptLabel = new Label("Распознанный вопрос:");
         transcriptLabel.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(transcriptLabel, Priority.ALWAYS);
         HBox transcriptHeader = new HBox(12, transcriptLabel, transcribeButton);
@@ -208,6 +229,7 @@ final class MainView {
         HBox.setHgrow(settingsSpacer, Priority.ALWAYS);
         HBox sourceAndSettings = new HBox(8,
                 sourceSelector, settingsSpacer, aiModeLabel, aiSettingsButton);
+        sourceAndSettings.getStyleClass().add("top-panel");
         sourceAndSettings.setAlignment(Pos.CENTER_LEFT);
 
         VBox root = new VBox(
@@ -222,10 +244,25 @@ final class MainView {
         root.setPadding(new Insets(15, 15, 15, 15));
 
         Scene scene = new Scene(root, 700, 858);
+        scene.getStylesheets().add(MainView.class.getResource("/response.css").toExternalForm());
         stage.setTitle("Voice Assistant");
         stage.setScene(scene);
         stage.setMinWidth(620);
         stage.setMinHeight(680);
+    }
+
+    private void updateStatusAppearance(Label label, String text) {
+        boolean error = text != null && (text.contains("Ошибка") || text.contains("Не удалось")
+                || text.contains("Не настроен"));
+        boolean active = !error && text != null && (text.contains("готов") || text.contains("Готов")
+                || text.contains("Идёт запись") || text.contains("распознана")
+                || text.contains("получен"));
+        boolean working = !error && !active && text != null && (text.contains("Запускаем")
+                || text.contains("Останавливаем") || text.contains("Распозна")
+                || text.contains("Генерация") || text.contains("Сохраняем"));
+        label.pseudoClassStateChanged(ERROR_STATUS, error);
+        label.pseudoClassStateChanged(ACTIVE_STATUS, active);
+        label.pseudoClassStateChanged(WORKING_STATUS, working);
     }
 
     void setResponseFontSize(int size) {

@@ -17,7 +17,7 @@ public class StubAiService implements AiService {
         }
 
         String response = "Это тестовый ответ ИИ. Получено сообщение: " + message.trim()
-                + ". В будущем здесь будет ответ модели DeepSeek.".repeat(21);
+                + ". Это демонстрация потокового ответа.".repeat(21);
         for (int offset = 0; offset < response.length(); offset += CHUNK_SIZE) {
             if (cancelled.getAsBoolean() || Thread.currentThread().isInterrupted()) {
                 throw new CancellationException("Генерация ответа отменена");

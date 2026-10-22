@@ -3,31 +3,31 @@ package com.voiceassistant.ai;
 import java.util.List;
 import java.util.Objects;
 
-public record AiSettings(AiMode mode, String deepSeekModel, String openRouterModel,
-                         String openAiAudioModel, String openRouterAudioModel, String systemPrompt,
-                         boolean useConversationContext, int contextDepth) {
-    public static final List<String> DEEPSEEK_MODELS = List.of("deepseek-flash", "deepseek-v4-pro");
-    public static final List<String> OPENROUTER_MODELS = List.of("openrouter/free");
-    public static final List<String> OPENAI_AUDIO_MODELS = List.of("gpt-audio-mini", "gpt-audio");
+public record AiSettings(AiMode mode, String openRouterModel,
+                         String openRouterAudioModel, String systemPrompt,
+                         boolean useConversationContext, int contextDepth,
+                         TranscriptionMode transcriptionMode, String transcriptionModel) {
+    public static final List<String> OPENROUTER_MODELS = OpenRouterModel.modelIds();
     public static final List<String> OPENROUTER_AUDIO_MODELS = List.of("openai/gpt-audio-mini", "openai/gpt-audio");
+    public static final List<String> TRANSCRIPTION_MODELS = List.of(
+            "openai/whisper-large-v3-turbo", "openai/whisper-large-v3", "openai/whisper-1",
+            "openai/gpt-transcribe", "openai/gpt-4o-transcribe");
     public static final String DEFAULT_PROMPT = "Ты полезный русскоязычный голосовой ассистент. "
             + "Отвечай понятно, точно и по существу. Если пользователь задаёт технический вопрос, "
             + "по возможности объясняй на примерах.";
 
     public AiSettings {
         Objects.requireNonNull(mode);
+        Objects.requireNonNull(transcriptionMode);
         Objects.requireNonNull(systemPrompt);
-        if (!DEEPSEEK_MODELS.contains(deepSeekModel)) {
-            throw new IllegalArgumentException("Указана неподдерживаемая модель DeepSeek.");
-        }
         if (!OPENROUTER_MODELS.contains(openRouterModel)) {
             throw new IllegalArgumentException("Указана неподдерживаемая модель OpenRouter.");
         }
-        if (!OPENAI_AUDIO_MODELS.contains(openAiAudioModel)) {
-            throw new IllegalArgumentException("Указана неподдерживаемая модель OpenAI Audio.");
-        }
         if (!OPENROUTER_AUDIO_MODELS.contains(openRouterAudioModel)) {
             throw new IllegalArgumentException("Указана неподдерживаемая модель OpenRouter Audio.");
+        }
+        if (!TRANSCRIPTION_MODELS.contains(transcriptionModel)) {
+            throw new IllegalArgumentException("Указана неподдерживаемая модель распознавания речи.");
         }
         if (systemPrompt.isBlank()) {
             throw new IllegalArgumentException("Системный промпт не должен быть пустым.");
@@ -38,17 +38,16 @@ public record AiSettings(AiMode mode, String deepSeekModel, String openRouterMod
     }
 
     public static AiSettings defaults() {
-        return new AiSettings(AiMode.STUB, DEEPSEEK_MODELS.getFirst(),
-                OPENROUTER_MODELS.getFirst(), OPENAI_AUDIO_MODELS.getFirst(),
-                OPENROUTER_AUDIO_MODELS.getFirst(), DEFAULT_PROMPT, false, 3);
+        return new AiSettings(AiMode.STUB, OPENROUTER_MODELS.getFirst(),
+                OPENROUTER_AUDIO_MODELS.getFirst(), DEFAULT_PROMPT, false, 3,
+                TranscriptionMode.LOCAL, TRANSCRIPTION_MODELS.getFirst());
     }
 
     public String model() {
         return switch (mode) {
             case OPENROUTER -> openRouterModel;
-            case OPENAI_AUDIO -> openAiAudioModel;
             case OPENROUTER_AUDIO -> openRouterAudioModel;
-            case STUB, DEEPSEEK -> deepSeekModel;
+            case STUB -> openRouterModel;
         };
     }
 }
