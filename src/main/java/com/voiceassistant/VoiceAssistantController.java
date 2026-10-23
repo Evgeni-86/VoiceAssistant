@@ -18,6 +18,11 @@ import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.scene.control.Button;
+import javafx.scene.control.TextInputControl;
+import javafx.scene.input.KeyCodeCombination;
+import javafx.scene.input.KeyCombination;
+import javafx.scene.input.KeyEvent;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
@@ -33,6 +38,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.UUID;
+import java.util.HashSet;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -67,6 +74,8 @@ final class VoiceAssistantController {
     private MainView view;
     private Stage stage;
     private AiSettings settings;
+    private HotkeySettings hotkeys = HotkeySettings.defaults();
+    private final Set<KeyCodeCombination> registeredHotkeys = new HashSet<>();
     private AiSettingsDialog settingsDialog;
     private AiRequest activeAiRequest;
     private Timeline aiFlushTimer;
@@ -125,6 +134,8 @@ final class VoiceAssistantController {
         view.recordButton.setOnAction(event -> startRecording());
         view.stopButton.setOnAction(event -> stopRecording(false));
         view.finishAndSendButton.setOnAction(event -> stopRecording(true));
+        stage.getScene().addEventFilter(KeyEvent.KEY_PRESSED, this::handleSingleKeyHotkey);
+        applyHotkeys(hotkeys);
         view.transcribeButton.setOnAction(event -> {
             if (state == State.IDLE && lastRecording != null && settings != null
                     && !directAudioMode()) {
@@ -169,6 +180,10 @@ final class VoiceAssistantController {
 
         updateControls();
         view.show(stage);
+        CompletableFuture.supplyAsync(settingsService::loadHotkeys, settingsExecutor)
+                .thenAccept(loaded -> Platform.runLater(() -> {
+                    if (state != State.CLOSING) applyHotkeys(loaded);
+                }));
         CompletableFuture.supplyAsync(() -> {
             try {
                 return settingsService.load();
@@ -211,15 +226,61 @@ final class VoiceAssistantController {
             settingsDialog.focus();
             return;
         }
-        settingsDialog = new AiSettingsDialog(stage, settings, settingsService, settingsExecutor, saved -> {
+        settingsDialog = new AiSettingsDialog(stage, settings, hotkeys, settingsService, settingsExecutor,
+                (saved, savedHotkeys) -> {
             if (settings != null && settings.mode() != saved.mode()) {
                 LOG.info("AI mode changed, from={}, to={}", settings.mode(), saved.mode());
             }
             settings = saved;
             view.aiModeLabel.setText("ИИ: " + modeName(saved.mode()));
+            applyHotkeys(savedHotkeys);
             updateControls();
         });
         settingsDialog.show();
+    }
+
+    private void applyHotkeys(HotkeySettings updated) {
+        var accelerators = stage.getScene().getAccelerators();
+        for (KeyCodeCombination old : registeredHotkeys) accelerators.remove(old);
+        registeredHotkeys.clear();
+        hotkeys = updated;
+        registerHotkey(updated.start(), () -> {
+            if (!view.recordButton.isDisabled()) view.recordButton.fire();
+        });
+        registerHotkey(updated.send(), () -> {
+            if (!view.finishAndSendButton.isDisabled()) view.finishAndSendButton.fire();
+        });
+        registerHotkey(updated.stop(), () -> {
+            if (!view.stopButton.isDisabled()) view.stopButton.fire();
+        });
+    }
+
+    private void registerHotkey(KeyCodeCombination combination, Runnable action) {
+        if (combination == null || isSingleKey(combination)) return;
+        stage.getScene().getAccelerators().put(combination, () -> {
+            if (stage.isFocused()) action.run();
+        });
+        registeredHotkeys.add(combination);
+    }
+
+    private void handleSingleKeyHotkey(KeyEvent event) {
+        if (!stage.isFocused() || stage.getScene().getFocusOwner() instanceof TextInputControl) return;
+        if (fireSingleKey(hotkeys.start(), view.recordButton, event)
+                || fireSingleKey(hotkeys.send(), view.finishAndSendButton, event)
+                || fireSingleKey(hotkeys.stop(), view.stopButton, event)) {
+            event.consume();
+        }
+    }
+
+    private static boolean fireSingleKey(KeyCodeCombination combination, Button button, KeyEvent event) {
+        if (combination == null || !isSingleKey(combination) || !combination.match(event)) return false;
+        if (!button.isDisabled()) button.fire();
+        return true;
+    }
+
+    private static boolean isSingleKey(KeyCodeCombination combination) {
+        return combination.getControl() != KeyCombination.ModifierValue.DOWN
+                && combination.getAlt() != KeyCombination.ModifierValue.DOWN;
     }
 
     private void updateControls() {

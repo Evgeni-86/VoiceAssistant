@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.List;
 
 import com.voiceassistant.ai.*;
+import com.voiceassistant.HotkeySettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,6 +21,9 @@ import org.slf4j.LoggerFactory;
 public final class AiSettingsService {
     private static final Logger LOG = LoggerFactory.getLogger(AiSettingsService.class);
     private static final String RESPONSE_FONT_SIZE = "responseFontSize";
+    private static final String HOTKEY_START = "hotkey.start";
+    private static final String HOTKEY_SEND = "hotkey.send";
+    private static final String HOTKEY_STOP = "hotkey.stop";
     private final Path settingsFile;
     private final Map<AiMode, WindowsDpapiSecretStore> secretStores;
 
@@ -78,6 +82,23 @@ public final class AiSettingsService {
         }
     }
 
+    public HotkeySettings loadHotkeys() {
+        HotkeySettings defaults = HotkeySettings.defaults();
+        if (!Files.exists(settingsFile)) return defaults;
+        Properties properties = new Properties();
+        try (InputStream input = Files.newInputStream(settingsFile)) {
+            properties.load(input);
+            return new HotkeySettings(
+                    HotkeySettings.parse(properties.getProperty(HOTKEY_START, defaults.start().getName())),
+                    HotkeySettings.parse(properties.getProperty(HOTKEY_SEND, defaults.send().getName())),
+                    HotkeySettings.parse(properties.getProperty(HOTKEY_STOP, defaults.stop().getName())));
+        } catch (IOException | IllegalArgumentException exception) {
+            LOG.warn("Hotkey settings load failed; using defaults, errorType={}",
+                    exception.getClass().getName());
+            return defaults;
+        }
+    }
+
     public synchronized void saveResponseFontSize(int size) throws IOException {
         Properties properties = new Properties();
         if (Files.exists(settingsFile)) {
@@ -109,7 +130,7 @@ public final class AiSettingsService {
     }
 
     public synchronized void save(AiSettings settings, Map<AiMode, String> newKeys,
-                                  Set<AiMode> deletedKeys) throws IOException {
+                                  Set<AiMode> deletedKeys, HotkeySettings hotkeys) throws IOException {
         Map<AiMode, byte[]> previousKeys = new java.util.EnumMap<>(AiMode.class);
         try {
             for (AiMode mode : List.of(AiMode.OPENROUTER)) {
@@ -137,6 +158,9 @@ public final class AiSettingsService {
             properties.setProperty("contextDepth", Integer.toString(settings.contextDepth()));
             properties.setProperty("transcriptionMode", settings.transcriptionMode().name());
             properties.setProperty("transcriptionModel", settings.transcriptionModel());
+            properties.setProperty(HOTKEY_START, hotkeys.start() == null ? "" : hotkeys.start().getName());
+            properties.setProperty(HOTKEY_SEND, hotkeys.send() == null ? "" : hotkeys.send().getName());
+            properties.setProperty(HOTKEY_STOP, hotkeys.stop() == null ? "" : hotkeys.stop().getName());
             writeProperties(properties);
             LOG.info("Settings saved, mode={}", settings.mode());
             LOG.debug("Settings model selected, model={}", selectedModel(settings));
